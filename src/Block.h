@@ -9,7 +9,7 @@ class Block {
     // Color m_color;
     // Vector3 m_position_middle;
     // Vector3 m_position_in_chunk;
-    int m_material_type;
+    unsigned short m_material_type;
     Block();
     // Block(Vector3 position, int material_type);
     // void draw() const;

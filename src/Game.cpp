@@ -25,8 +25,6 @@ void Game::init() {
     m_camera_speed = {0 , 0, 0};
     HideCursor();
     ResourceManager::Get().init();
-    m_world = World();
-    m_renderer = Renderer();
     m_renderer.update_mesh();
 }
 
