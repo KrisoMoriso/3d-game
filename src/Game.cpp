@@ -4,6 +4,7 @@
 
 #include "Block.h"
 #include "raylib.h"
+#include "Renderer.h"
 #include "ResourceManager.h"
 #define AIR 0
 #define DIRT 1
@@ -23,11 +24,10 @@ void Game::init() {
     m_speed_adjust = 0.1;
     m_camera_speed = {0 , 0, 0};
     HideCursor();
-    //block
-    m_chunk_1 = Chunk(Vector3{0, 0, 0}, Vector3{0, 0, 0});
-    m_chunk_2 = Chunk(Vector3{-1, 0, -1}, Vector3{-16, 0, -16});
-
     ResourceManager::Get().init();
+    // m_world = World();
+    // m_renderer = Renderer();
+    // m_renderer.update_mesh();
 }
 
 void Game::main_loop() {
@@ -35,9 +35,7 @@ void Game::main_loop() {
     ClearBackground(WHITE);
     BeginMode3D(m_camera);
         DrawGrid(32, 1);
-        m_chunk_1.draw();
-        m_chunk_2.draw();
-
+        // m_renderer.render();
     EndMode3D();
     DrawText(TextFormat("%f %f %f", m_camera.position.x, m_camera.position.y, m_camera.position.z), 50, 50, 25, BLACK);
     DrawFPS(50, 100);

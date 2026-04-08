@@ -14,7 +14,7 @@ public:
     }
 
 
-    Model DIRT_MODEL;
+    Texture DIRT_TEXTURE;
     void init();
 
 private:

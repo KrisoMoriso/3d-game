@@ -28,6 +28,10 @@ add_executable(3d_game src/main.cpp
         src/Game.cpp
         src/Game.h
         src/Chunk.cpp
-        src/Chunk.h)
+        src/Chunk.h
+        src/Renderer.cpp
+        src/Renderer.h
+        src/World.cpp
+        src/World.h)
 
 target_link_libraries(${PROJECT_NAME} raylib)
