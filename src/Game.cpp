@@ -25,9 +25,9 @@ void Game::init() {
     m_camera_speed = {0 , 0, 0};
     HideCursor();
     ResourceManager::Get().init();
-    // m_world = World();
-    // m_renderer = Renderer();
-    // m_renderer.update_mesh();
+    m_world = World();
+    m_renderer = Renderer();
+    m_renderer.update_mesh();
 }
 
 void Game::main_loop() {
@@ -35,7 +35,7 @@ void Game::main_loop() {
     ClearBackground(WHITE);
     BeginMode3D(m_camera);
         DrawGrid(32, 1);
-        // m_renderer.render();
+        m_renderer.render();
     EndMode3D();
     DrawText(TextFormat("%f %f %f", m_camera.position.x, m_camera.position.y, m_camera.position.z), 50, 50, 25, BLACK);
     DrawFPS(50, 100);
