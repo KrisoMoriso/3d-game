@@ -12,7 +12,7 @@
 
 void Game::init() {
     InitWindow(1700, 900, "3d_game");
-    ToggleBorderlessWindowed();
+    // ToggleBorderlessWindowed();
     SetTargetFPS(165);
     m_camera = { 0 };
     m_camera.position = (Vector3){ 20.0f, 10.0f, 10.0f }; // Camera position

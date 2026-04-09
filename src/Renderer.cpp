@@ -4,16 +4,17 @@
 #include "ResourceManager.h"
 void Renderer::update_mesh()
 {
-    if (m_cube_model.meshes[0].vaoId > 0){
-        UnloadMesh(m_cube_model.meshes[0]);
-    }
+    // todo:  REMEMBER TO UNLOAD MESHES !!!!
+    // if (m_cube_model.meshes[0].vaoId > 0){
+    //     UnloadMesh(m_cube_model.meshes[0]);
+    // }
     std::vector<float> vertices;
     std::vector<float> texcoords;
     std::vector<unsigned short> indices;
 
 
-    Chunk& chunk = Game::Get().m_world.m_chunks[0][0][0];
-    auto& blocks = chunk.m_blocks;
+    auto chunk = Game::Get().m_world.m_chunks.find({0, 0, 0});
+    auto& blocks = chunk->second->m_blocks;
 
     Block* current_block = &blocks[0];
 
