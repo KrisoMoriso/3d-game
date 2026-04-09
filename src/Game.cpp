@@ -6,6 +6,7 @@
 #include "raylib.h"
 #include "Renderer.h"
 #include "ResourceManager.h"
+#include "rlgl.h"
 #define AIR 0
 #define DIRT 1
 #define MOUSE_SPEED 0.1
@@ -15,7 +16,7 @@ void Game::init() {
     // ToggleBorderlessWindowed();
     SetTargetFPS(165);
     m_camera = { 0 };
-    m_camera.position = (Vector3){ 20.0f, 10.0f, 10.0f }; // Camera position
+    m_camera.position = (Vector3){ 20.0f, 105.0f, 10.0f }; // Camera position
     m_camera.target = (Vector3){ 0.0f, 0.0f, 0.0f };      // Camera looking at point
     m_camera.target =
     m_camera.up = (Vector3){ 0.0f, 1.0f, 0.0f };          // Camera up vector (rotation towards target)
@@ -26,6 +27,7 @@ void Game::init() {
     HideCursor();
     ResourceManager::Get().init();
     m_renderer.update_mesh();
+
 }
 
 void Game::main_loop() {
@@ -33,7 +35,9 @@ void Game::main_loop() {
     ClearBackground(WHITE);
     BeginMode3D(m_camera);
         DrawGrid(32, 1);
-        m_renderer.render();
+        m_renderer.render_chunks();
+
+
     EndMode3D();
     DrawText(TextFormat("%f %f %f", m_camera.position.x, m_camera.position.y, m_camera.position.z), 50, 50, 25, BLACK);
     DrawFPS(50, 100);

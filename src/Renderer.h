@@ -2,24 +2,19 @@
 #include <vector>
 
 #include "raylib.h"
-
-
+#include "World.h"
 class Renderer {
 public:
     Model m_cube_model;
-    const float m_face_vertices[6][12]{
-        // Front face (Z+)
-        { 0,0,1,  1,0,1,  1,1,1,  0,1,1 },
-        // Back face (Z-)
-        { 1,0,0,  0,0,0,  0,1,0,  1,1,0 },
-        // Left face (X-)
-        { 0,0,0,  0,0,1,  0,1,1,  0,1,0 },
-        // Right face (X+)
-        { 1,0,1,  1,0,0,  1,1,0,  1,1,1 },
-        // Top face (Y+)
-        { 0,1,1,  1,1,1,  1,1,0,  0,1,0 },
-        // Bottom face (Y-)
-        { 0,0,0,  1,0,0,  1,0,1,  0,0,1 }
+    std::vector<Model> m_chunk_models;
+    std::vector<World::ChunkPos> m_chunk_positions;
+    const Vector3 m_face_vertices[6][4]{
+        { {0,0,1}, {1,0,1}, {1,1,1}, {0,1,1} }, // Front (Z+)
+        { {1,0,0}, {0,0,0}, {0,1,0}, {1,1,0} }, // Back (Z-)
+        { {0,0,0}, {0,0,1}, {0,1,1}, {0,1,0} }, // Left (X-)
+        { {1,0,1}, {1,0,0}, {1,1,0}, {1,1,1} }, // Right (X+)
+        { {0,1,1}, {1,1,1}, {1,1,0}, {0,1,0} }, // Top (Y+)
+        { {0,0,0}, {1,0,0}, {1,0,1}, {0,0,1} }  // Bottom (Y-)
     };
     const unsigned short m_face_indices[6]
     {
@@ -33,13 +28,23 @@ public:
     1.0f, 1.0f,  // Top-Right
     0.0f, 1.0f   // Top-Left
     };
+    const unsigned char m_shades[6]{
+        200,
+        160,
+        200,
+        160,
+        255,
+        130
+    };
+    void update_mesh_chunk(World::ChunkPos chunk_pos);
     void update_mesh();
     void add_face(int face_id, int x, int y, int z,
                     std::vector<float>& vertices,
                     std::vector<float>& texcoords,
                     std::vector<unsigned short>& indices,
+                    std::vector<unsigned char>& shades,
                     int& indice_counter);
-    void render();
+    void render_chunks();
 
     Renderer(){}
 
