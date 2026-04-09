@@ -32,7 +32,7 @@ void Game::init() {
 
 void Game::main_loop() {
     BeginDrawing();
-    ClearBackground(WHITE);
+    ClearBackground(SKYBLUE);
     BeginMode3D(m_camera);
         DrawGrid(32, 1);
         m_renderer.render_chunks();
