@@ -3,9 +3,9 @@
 World::World()
 {
 
-    for (int x = -10; x < 10; ++x){
-        for (int y = 0; y < 6; ++y){
-            for (int z = -10; z < 10; ++z){
+    for (int x = -100; x < 100; ++x){
+        for (int y = 0; y < WORLD_CHUNK_HEIGHT; ++y){
+            for (int z = -100; z < 100; ++z){
                 m_chunks[{x, y, z}] = std::make_unique<Chunk>();
             }
         }
@@ -22,5 +22,11 @@ World::World()
 
 }
 
-
+World::ChunkPos World::get_chunk_position(Vector3 position){
+    ChunkPos chunk_pos;
+    chunk_pos.x = (int)position.x >> 4;
+    chunk_pos.y = (int)position.y >> 4;
+    chunk_pos.z = (int)position.z >> 4;
+    return chunk_pos;
+}
 

@@ -12,7 +12,6 @@ void Renderer::update_mesh_chunk(World::ChunkPos chunk_pos)
     std::vector<float> texcoords;
     std::vector<unsigned short> indices;
     std::vector<unsigned char> shades;
-    m_chunk_positions.push_back(chunk_pos);
 
     auto chunk = Game::Get().m_world.m_chunks.find(chunk_pos);
     auto& blocks = chunk->second->m_blocks;
@@ -120,8 +119,13 @@ void Renderer::update_mesh_chunk(World::ChunkPos chunk_pos)
     memcpy(cubeMesh.colors, shades.data(), shades.size()* sizeof(unsigned char) );
     UploadMesh(&cubeMesh, true);
 
-    m_chunk_models.emplace_back(LoadModelFromMesh(cubeMesh));
-    m_chunk_models[m_chunk_models.size() - 1].materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = ResourceManager::Get().DIRT_TEXTURE;
+    if (m_chunk_models.contains(chunk_pos)){
+        UnloadModel(m_chunk_models[chunk_pos]);
+        m_chunk_models.erase(chunk_pos);
+    }
+
+    m_chunk_models[chunk_pos] = LoadModelFromMesh(cubeMesh);
+    m_chunk_models[chunk_pos].materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = ResourceManager::Get().DIRT_TEXTURE;
 }
 
 void Renderer::add_face(int face_id, int x, int y, int z,
@@ -153,19 +157,37 @@ void Renderer::add_face(int face_id, int x, int y, int z,
 
 void Renderer::render_chunks()
 {
-    for (int i = 0; i < m_chunk_models.size(); i++){
-        World::ChunkPos chunk_pos = m_chunk_positions[i];
-        DrawModel(m_chunk_models[i], Vector3{float(chunk_pos.x *16),float(chunk_pos.y *16),float(chunk_pos.z *16)}, 1, WHITE);
+    for (auto& pair : m_chunk_models){
+        World::ChunkPos chunk_pos = pair.first;
+        DrawModel(pair.second, Vector3{float(chunk_pos.x *16),float(chunk_pos.y *16),float(chunk_pos.z *16)}, 1, WHITE);
 
     }
 }
-void Renderer::update_mesh(){
-    for (int x = -10; x < 10; ++x){
-        for (int y = 0; y < 6; ++y){
-            for (int z = -10; z < 10; ++z){
-                update_mesh_chunk({x,y,z});
+void Renderer::update_mesh(Vector3 player_pos){
+    World::ChunkPos chunk_pos = World::get_chunk_position(player_pos);
+    int render_distance = 8;
+    for (int x = chunk_pos.x - render_distance; x < chunk_pos.x + render_distance; ++x){
+        for (int y = 0; y < World::WORLD_CHUNK_HEIGHT; ++y){
+            for (int z = chunk_pos.z - render_distance; z < chunk_pos.z + render_distance; ++z){
+                World::ChunkPos position = {x, y, z};
+                if (!m_chunk_models.contains(position)){
+                    update_mesh_chunk(position);
+                }
             }
         }
+    }
+    std::vector<World::ChunkPos> models_to_erase;
+    models_to_erase.reserve(25);
+    for (auto pair : m_chunk_models){
+        if (!(pair.first.x >= chunk_pos.x - render_distance and pair.first.x <= chunk_pos.x + render_distance
+            and pair.first.z >= chunk_pos.z - render_distance and pair.first.z <= chunk_pos.z + render_distance)){
+            UnloadModel(pair.second);
+            // m_chunk_models.erase(pair.first);
+            models_to_erase.push_back(pair.first);
+        }
+    }
+    for (auto to_erase : models_to_erase){
+        m_chunk_models.erase(to_erase);
     }
 }
 

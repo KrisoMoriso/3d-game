@@ -26,18 +26,18 @@ void Game::init() {
     m_camera_speed = {0 , 0, 0};
     HideCursor();
     ResourceManager::Get().init();
-    m_renderer.update_mesh();
+    m_renderer.update_mesh(m_camera.position);
 
 }
 
 void Game::main_loop() {
+    m_renderer.update_mesh(m_camera.position);
+
     BeginDrawing();
     ClearBackground(SKYBLUE);
     BeginMode3D(m_camera);
         DrawGrid(32, 1);
         m_renderer.render_chunks();
-
-
     EndMode3D();
     DrawText(TextFormat("%f %f %f", m_camera.position.x, m_camera.position.y, m_camera.position.z), 50, 50, 25, BLACK);
     DrawFPS(50, 100);

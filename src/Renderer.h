@@ -6,8 +6,7 @@
 class Renderer {
 public:
     Model m_cube_model;
-    std::vector<Model> m_chunk_models;
-    std::vector<World::ChunkPos> m_chunk_positions;
+    std::unordered_map<World::ChunkPos, Model, World::ChunkPosHash> m_chunk_models;
     const Vector3 m_face_vertices[6][4]{
         { {0,0,1}, {1,0,1}, {1,1,1}, {0,1,1} }, // Front (Z+)
         { {1,0,0}, {0,0,0}, {0,1,0}, {1,1,0} }, // Back (Z-)
@@ -37,7 +36,7 @@ public:
         130
     };
     void update_mesh_chunk(World::ChunkPos chunk_pos);
-    void update_mesh();
+    void update_mesh(Vector3 player_pos);
     void add_face(int face_id, int x, int y, int z,
                     std::vector<float>& vertices,
                     std::vector<float>& texcoords,
