@@ -4,6 +4,7 @@
 #include "Block.h"
 #include "Chunk.h"
 #include "Renderer.h"
+#include "ThreadPool.h"
 #include "World.h"
 
 
@@ -24,6 +25,8 @@ public:
     Renderer m_renderer;
     float m_speed_adjust;
     Vector3 m_camera_speed;
+    ThreadPool m_thread_pool = ThreadPool(6);
+    const int RENDER_DISTANCE = 8;
 private:
     Game(){}
 };

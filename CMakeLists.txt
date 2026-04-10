@@ -32,6 +32,8 @@ add_executable(3d_game src/main.cpp
         src/Renderer.cpp
         src/Renderer.h
         src/World.cpp
-        src/World.h)
+        src/World.h
+        src/ThreadPool.cpp
+        src/ThreadPool.h)
 
 target_link_libraries(${PROJECT_NAME} raylib)

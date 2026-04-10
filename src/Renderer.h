@@ -66,8 +66,12 @@ public:
     };
     struct MeshJob{
         World::ChunkPos chunk_pos;
-        std::unordered_map<World::ChunkPos, Chunk, World::ChunkPosHash> chunks;
+        // std::unordered_map<World::ChunkPos, Chunk, World::ChunkPosHash> chunks;
+        std::vector<Block> center_blocks;
+        std::vector<Block> neighbour_blocks[6];
+        bool do_neighbour_exists[6];
     };
+    MeshJob pack_mesh_job(World::ChunkPos chunk_pos);
     void update_mesh_chunk(MeshJob mesh_job, SafeQueue<MeshResult>& result_queue);
     void update_mesh(Vector3 player_pos);
     void add_face(int face_id, int x, int y, int z,
@@ -78,8 +82,8 @@ public:
                     int& indice_counter);
     void render_chunks();
     void send_chunk_to_thread(World::ChunkPos chunk_pos);
-    void receive_chunks();
     SafeQueue<MeshResult> m_result_queue;
-    int m_active_threads = 0;
-
+    std::queue<World::ChunkPos> m_queue_to_mesh;
+    World::ChunkPos m_last_player_chunk;
+    std::vector<World::ChunkPos> m_chunks_to_unload;
 };
