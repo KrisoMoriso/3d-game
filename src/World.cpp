@@ -3,9 +3,9 @@
 World::World()
 {
 
-    for (int x = -100; x < 100; ++x){
+    for (int x = -60; x < 60; ++x){
         for (int y = 0; y < WORLD_CHUNK_HEIGHT; ++y){
-            for (int z = -100; z < 100; ++z){
+            for (int z = -60; z < 60; ++z){
                 m_chunks[{x, y, z}] = std::make_unique<Chunk>();
             }
         }

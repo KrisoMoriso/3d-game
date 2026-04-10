@@ -1,10 +1,32 @@
 #pragma once
+#include <queue>
 #include <vector>
 
 #include "raylib.h"
 #include "World.h"
 class Renderer {
 public:
+    //safe queue for threads
+    template<typename T>
+    class SafeQueue{
+    private:
+        std::queue<T> m_queue;
+        std::mutex m_mutex;
+    public:
+        void push(T item){
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_queue.push(std::move(item));
+        }
+        bool try_pop(T& item){
+            std::lock_guard<std::mutex> lock(m_mutex);
+            if (m_queue.empty()) return false;
+            item = std::move(m_queue.front());
+            m_queue.pop();
+            return true;
+        }
+    };
+
+    Renderer(){}
     Model m_cube_model;
     std::unordered_map<World::ChunkPos, Model, World::ChunkPosHash> m_chunk_models;
     const Vector3 m_face_vertices[6][4]{
@@ -35,7 +57,18 @@ public:
         255,
         130
     };
-    void update_mesh_chunk(World::ChunkPos chunk_pos);
+    struct MeshResult{
+        std::vector<float> vertices;
+        std::vector<float> texcoords;
+        std::vector<unsigned short> indices;
+        std::vector<unsigned char> shades;
+        World::ChunkPos chunk_pos;
+    };
+    struct MeshJob{
+        World::ChunkPos chunk_pos;
+        std::unordered_map<World::ChunkPos, Chunk, World::ChunkPosHash> chunks;
+    };
+    void update_mesh_chunk(MeshJob mesh_job, SafeQueue<MeshResult>& result_queue);
     void update_mesh(Vector3 player_pos);
     void add_face(int face_id, int x, int y, int z,
                     std::vector<float>& vertices,
@@ -44,7 +77,9 @@ public:
                     std::vector<unsigned char>& shades,
                     int& indice_counter);
     void render_chunks();
-
-    Renderer(){}
+    void send_chunk_to_thread(World::ChunkPos chunk_pos);
+    void receive_chunks();
+    SafeQueue<MeshResult> m_result_queue;
+    int m_active_threads = 0;
 
 };
