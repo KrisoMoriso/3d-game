@@ -27,6 +27,7 @@ public:
     Vector3 m_camera_speed;
     ThreadPool m_thread_pool = ThreadPool(6);
     const int RENDER_DISTANCE = 8;
+    const int WORLD_SEED = 12321;
 private:
     Game(){}
 };

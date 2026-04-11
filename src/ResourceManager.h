@@ -14,7 +14,7 @@ public:
     }
 
 
-    Texture DIRT_TEXTURE;
+    Material WORLD_MATERIAL;
     void init();
 
 private:
