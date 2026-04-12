@@ -215,6 +215,36 @@ void Renderer::render_chunks(Vector3 player_pos)
 }
 void Renderer::update_mesh(Vector3 player_pos){
     MeshResult finished_mesh;
+    while (m_result_queue_priority.try_pop(finished_mesh)){
+        std::vector<float> vertices = finished_mesh.vertices;
+        std::vector<float> texcoords = finished_mesh.texcoords;
+        std::vector<unsigned short> indices = finished_mesh.indices;
+        std::vector<unsigned char> shades = finished_mesh.shades;
+        World::ChunkPos chunk_pos = finished_mesh.chunk_pos;
+        Mesh cubeMesh = {0};
+        cubeMesh.vertexCount = vertices.size()/3;
+        cubeMesh.triangleCount = indices.size()/3;
+        cubeMesh.vertices = (float *)MemAlloc(cubeMesh.vertexCount * 3 * sizeof(float));
+        cubeMesh.texcoords = (float *)MemAlloc(cubeMesh.vertexCount * 2 * sizeof(float));
+        cubeMesh.indices = (unsigned short *)MemAlloc(cubeMesh.triangleCount * 3 * sizeof(unsigned short));
+        cubeMesh.colors = (unsigned char *)MemAlloc(cubeMesh.vertexCount * 4 * sizeof(unsigned char));
+
+
+        memcpy(cubeMesh.vertices, vertices.data(), vertices.size()*sizeof(float));
+        memcpy(cubeMesh.texcoords, texcoords.data(), texcoords.size() * sizeof(float));
+        memcpy(cubeMesh.indices, indices.data(), indices.size()*sizeof(unsigned short));
+        memcpy(cubeMesh.colors, shades.data(), shades.size()* sizeof(unsigned char) );
+        UploadMesh(&cubeMesh, true);
+
+        if (m_chunk_meshes.contains(chunk_pos)){
+            UnloadMesh(m_chunk_meshes[chunk_pos]);
+            m_chunk_meshes.erase(chunk_pos);
+        }
+
+        m_chunk_meshes[chunk_pos] = cubeMesh;
+        Game::Get().m_world.m_chunks[chunk_pos]->m_is_meshing = false;
+
+    }
     if (m_result_queue.try_pop(finished_mesh)){
         std::vector<float> vertices = finished_mesh.vertices;
         std::vector<float> texcoords = finished_mesh.texcoords;
@@ -267,13 +297,18 @@ void Renderer::update_mesh(Vector3 player_pos){
 
     int max_sends = 12;
     int sent_this_frame = 0;
+    while (!m_queue_to_mesh_priority.empty()){
+        World::ChunkPos pos_queue = m_queue_to_mesh_priority.front();
+        m_queue_to_mesh_priority.pop();
+        send_chunk_to_thread(pos_queue, true);
+        sent_this_frame++;
+    }
     while (!m_queue_to_mesh.empty() and sent_this_frame < max_sends){
         World::ChunkPos pos_queue = m_queue_to_mesh.front();
         m_queue_to_mesh.pop();
-        send_chunk_to_thread(pos_queue);
+        send_chunk_to_thread(pos_queue, false);
         sent_this_frame++;
     }
-
 
 
     if (chunk_pos != m_last_player_chunk){
@@ -310,11 +345,18 @@ void Renderer::update_mesh(Vector3 player_pos){
 
 }
 
-void Renderer::send_chunk_to_thread(World::ChunkPos chunk_pos){
+void Renderer::send_chunk_to_thread(World::ChunkPos chunk_pos, bool is_priority){
     MeshJob mesh_job = pack_mesh_job(chunk_pos);
-    Game::Get().m_thread_pool.enqueue([this, mesh_job](){
-       this->update_mesh_chunk(mesh_job, m_result_queue);
-    });
+    if (!is_priority){
+        Game::Get().m_thread_pool.enqueue([this, mesh_job](){
+           this->update_mesh_chunk(mesh_job, m_result_queue);
+        });
+
+    } else{
+        Game::Get().m_thread_pool.enqueue([this, mesh_job](){
+           this->update_mesh_chunk(mesh_job, m_result_queue_priority);
+        });
+    }
 }
 
 
@@ -327,7 +369,7 @@ void Renderer::update_block_meshes(World::ChunkPos chunk_pos, int local_x, int l
         if (Game::Get().m_world.m_chunks.count(pos) > 0) {
             auto& chunk = Game::Get().m_world.m_chunks[pos];
             if (chunk && !chunk->m_is_meshing) {
-                Game::Get().m_renderer.m_queue_to_mesh.emplace(pos);
+                Game::Get().m_renderer.m_queue_to_mesh_priority.emplace(pos);
                 chunk->m_is_meshing = true;
             }
         }
