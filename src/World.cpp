@@ -6,13 +6,6 @@
 World::World()
 {
 
-    // for (int x = -60; x < 60; ++x){
-    //     for (int y = 0; y < WORLD_CHUNK_HEIGHT; ++y){
-    //         for (int z = -60; z < 60; ++z){
-    //             m_chunks[{x, y, z}] = std::make_unique<Chunk>();
-    //         }
-    //     }
-    // }
     m_chunks[{0, WORLD_CHUNK_HEIGHT - 1, 0}] = std::make_unique<Chunk>();
     for (auto& block : m_chunks.find({0, WORLD_CHUNK_HEIGHT - 1, 0})->second->m_blocks){
         block.m_material_type = 0;
@@ -23,10 +16,6 @@ World::World()
     m_chunks.find({0, WORLD_CHUNK_HEIGHT - 1, 0})->second->m_blocks[2733].m_material_type = BLOCK_MATERIALS::DIRT;
     m_chunks.find({0, WORLD_CHUNK_HEIGHT - 1, 0})->second->m_blocks[2765].m_material_type = BLOCK_MATERIALS::OAK_PLANKS;
     m_chunks.find({0, WORLD_CHUNK_HEIGHT - 1, 0})->second->m_blocks[2797].m_material_type = BLOCK_MATERIALS::OAK_LOG;
-
-
-
-
 
 }
 
@@ -138,5 +127,39 @@ World::ChunkPos World::get_chunk_position(Vector3 position){
     chunk_pos.y = (int)position.y >> 4;
     chunk_pos.z = (int)position.z >> 4;
     return chunk_pos;
+}
+
+unsigned short World::get_block_material(int x, int y, int z){
+    int chunk_x = x >> 4;
+    int chunk_y = y >> 4;
+    int chunk_z = z >> 4;
+
+    int block_x = x & 15;
+    int block_y = y & 15;
+    int block_z = z & 15;
+
+    auto chunk_it = m_chunks.find({chunk_x, chunk_y, chunk_z});
+
+    if (chunk_it != m_chunks.end()){
+        return chunk_it->second->getBlockMaterial(block_x, block_y, block_z);
+    }
+    return 0;
+}
+
+void World::set_block_material(int x, int y, int z, unsigned short material){
+    int chunk_x = x >> 4;
+    int chunk_y = y >> 4;
+    int chunk_z = z >> 4;
+
+    int block_x = x & 15;
+    int block_y = y & 15;
+    int block_z = z & 15;
+
+    auto chunk_it = m_chunks.find({chunk_x, chunk_y, chunk_z});
+
+    if (chunk_it != m_chunks.end()){
+        chunk_it->second->setBlock(block_x, block_y, block_z, material);
+    }
+
 }
 

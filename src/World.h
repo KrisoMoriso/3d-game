@@ -38,6 +38,8 @@ public:
     World();
     static constexpr int WORLD_CHUNK_HEIGHT = 10;
     static ChunkPos get_chunk_position(Vector3 position);
+    unsigned short get_block_material(int x, int y, int z);
+    void set_block_material(int x, int y, int z, unsigned short material);
     void generate_world(Vector3 player_position);
     ChunkPos m_last_player_chunk;
     struct GenerationJob{

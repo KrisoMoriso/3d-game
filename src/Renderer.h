@@ -66,6 +66,7 @@ public:
                     int& indice_counter);
     void render_chunks(Vector3 player_pos);
     void send_chunk_to_thread(World::ChunkPos chunk_pos);
+    void update_block_meshes(World::ChunkPos chunk_pos, int local_x, int local_y, int local_z);
     ThreadPool::SafeQueue<MeshResult> m_result_queue;
     std::queue<World::ChunkPos> m_queue_to_mesh;
     World::ChunkPos m_last_player_chunk;

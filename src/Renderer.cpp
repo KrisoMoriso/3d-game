@@ -317,3 +317,32 @@ void Renderer::send_chunk_to_thread(World::ChunkPos chunk_pos){
     });
 }
 
+
+
+// Pass in the local coordinates (0-15) of the broken/placed block
+void Renderer::update_block_meshes(World::ChunkPos chunk_pos, int local_x, int local_y, int local_z) {
+
+    // Helper lambda to safely queue a chunk
+    auto queue_chunk = [](World::ChunkPos pos) {
+        if (Game::Get().m_world.m_chunks.count(pos) > 0) {
+            auto& chunk = Game::Get().m_world.m_chunks[pos];
+            if (chunk && !chunk->m_is_meshing) {
+                Game::Get().m_renderer.m_queue_to_mesh.emplace(pos);
+                chunk->m_is_meshing = true;
+            }
+        }
+    };
+
+    // 1. ALWAYS remesh the chunk the block is inside of
+    queue_chunk(chunk_pos);
+
+    // 2. ONLY remesh neighbors if the block is on the edge (0 or 15)
+    if (local_x == 0)  queue_chunk({chunk_pos.x - 1, chunk_pos.y, chunk_pos.z});
+    if (local_x == 15) queue_chunk({chunk_pos.x + 1, chunk_pos.y, chunk_pos.z});
+
+    if (local_y == 0)  queue_chunk({chunk_pos.x, chunk_pos.y - 1, chunk_pos.z});
+    if (local_y == 15) queue_chunk({chunk_pos.x, chunk_pos.y + 1, chunk_pos.z});
+
+    if (local_z == 0)  queue_chunk({chunk_pos.x, chunk_pos.y, chunk_pos.z - 1});
+    if (local_z == 15) queue_chunk({chunk_pos.x, chunk_pos.y, chunk_pos.z + 1});
+}
