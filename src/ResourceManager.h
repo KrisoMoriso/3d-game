@@ -15,6 +15,7 @@ public:
 
 
     Material WORLD_MATERIAL;
+    Texture2D CROSSHAIR_TEXTURE;
     void init();
 
 private:

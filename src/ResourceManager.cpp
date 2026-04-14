@@ -6,4 +6,6 @@ void ResourceManager::init() {
     SetTextureFilter(texture, TEXTURE_FILTER_POINT);
     WORLD_MATERIAL = LoadMaterialDefault();
     SetMaterialTexture(&WORLD_MATERIAL, MATERIAL_MAP_ALBEDO, texture);
+    CROSSHAIR_TEXTURE = LoadTexture("crosshair.png");
+    SetTextureFilter(CROSSHAIR_TEXTURE, TEXTURE_FILTER_POINT);
 }

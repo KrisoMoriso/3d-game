@@ -1,4 +1,5 @@
 #pragma once
+#include <math.h>
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -15,6 +16,31 @@ public:
         static constexpr unsigned short OAK_PLANKS = 4;
         static constexpr unsigned short OAK_LOG = 5;
         static constexpr unsigned short SAND = 6;
+        static std::string match_material(unsigned short material){
+            if (material == 0){
+                return "AIR";
+            }
+            if (material == 1){
+                return "DIRT";
+            }
+            if (material == 2) {
+                return "GRASS_BLOCK";
+            }
+            if (material == 3) {
+                return "STONE";
+            }
+            if (material == 4) {
+                return "OAK_PLANKS";
+            }
+            if (material == 5) {
+                return "OAK_LOG";
+            }
+            if (material == 6) {
+                return "SAND";
+            }
+
+            return "UNKNOWN";
+        }
     };
     struct ChunkPos{
         int x, y, z;
