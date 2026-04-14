@@ -49,9 +49,8 @@ public:
     };
     struct MeshJob{
         World::ChunkPos chunk_pos;
-        // std::unordered_map<World::ChunkPos, Chunk, World::ChunkPosHash> chunks;
-        std::vector<Block> center_blocks;
-        std::vector<Block> neighbour_blocks[6];
+        std::shared_ptr<Chunk> center_chunk;
+        std::shared_ptr<Chunk> neighbour_chunks[6];
         bool do_neighbour_exists[6];
     };
     MeshJob pack_mesh_job(World::ChunkPos chunk_pos);

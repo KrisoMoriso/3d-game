@@ -1,5 +1,6 @@
 #pragma once
 #include <array>
+#include <shared_mutex>
 #include <vector>
 
 #include "Block.h"
@@ -15,5 +16,5 @@ public:
     bool m_is_generating = false;
     void setBlock(int x, int y, int z, unsigned short material);
     unsigned short getBlockMaterial(int x, int y, int z);
-
+    std::shared_mutex m_block_mutex;
 };

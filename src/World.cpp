@@ -282,7 +282,10 @@ void World::set_block_material(int x, int y, int z, unsigned short material){
     auto chunk_it = m_chunks.find({chunk_x, chunk_y, chunk_z});
 
     if (chunk_it != m_chunks.end()){
-        chunk_it->second->setBlock(block_x, block_y, block_z, material);
+        {
+            std::unique_lock<std::shared_mutex> lock(chunk_it->second->m_block_mutex);
+            chunk_it->second->setBlock(block_x, block_y, block_z, material);
+        }
     }
 
 }

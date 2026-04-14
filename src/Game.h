@@ -24,9 +24,10 @@ public:
     World m_world;
     Renderer m_renderer;
     Player m_player;
-    ThreadPool m_thread_pool = ThreadPool(6);
+    ThreadPool m_thread_pool;
     const int RENDER_DISTANCE = 8;
-    const int WORLD_SEED = 12321;
+    const int WORLD_SEED = 12521;
 private:
-    Game(){}
+    Game() : m_thread_pool(6)
+    {}
 };

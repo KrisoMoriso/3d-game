@@ -62,7 +62,7 @@ public:
             return hash;
         }
     };
-    std::unordered_map<ChunkPos, std::unique_ptr<Chunk>, ChunkPosHash> m_chunks;
+    std::unordered_map<ChunkPos, std::shared_ptr<Chunk>, ChunkPosHash> m_chunks;
     World();
     static constexpr int WORLD_CHUNK_HEIGHT = 10;
     static ChunkPos get_chunk_position(Vector3 position);

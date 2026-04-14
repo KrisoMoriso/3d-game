@@ -1,5 +1,6 @@
 #include "Renderer.h"
 
+#include <format>
 #include <thread>
 
 #include "Game.h"
@@ -19,13 +20,13 @@ Renderer::MeshJob Renderer::pack_mesh_job(World::ChunkPos chunk_pos){
     };
     auto it_center_chunk = Game::Get().m_world.m_chunks.find(chunk_pos);
     if (it_center_chunk != Game::Get().m_world.m_chunks.end()){
-        mesh_job.center_blocks = it_center_chunk->second->m_blocks;
+        mesh_job.center_chunk = it_center_chunk->second;
     }
     for (int i = 0; i < 6; ++i){
         auto it_neighbour_blocks = Game::Get().m_world.m_chunks.find(offsets[i]);
 
         if (it_neighbour_blocks != Game::Get().m_world.m_chunks.end() and !it_neighbour_blocks->second->m_is_generating){
-            mesh_job.neighbour_blocks[i] = it_neighbour_blocks->second->m_blocks;
+            mesh_job.neighbour_chunks[i] = it_neighbour_blocks->second;
             mesh_job.do_neighbour_exists[i] = true;
         } else{
             mesh_job.do_neighbour_exists[i] = false;
@@ -36,15 +37,21 @@ Renderer::MeshJob Renderer::pack_mesh_job(World::ChunkPos chunk_pos){
 
 void Renderer::update_mesh_chunk(MeshJob mesh_job, ThreadPool::SafeQueue<MeshResult>& result_queue)
 {
+
+    std::shared_lock<std::shared_mutex> center_lock(mesh_job.center_chunk->m_block_mutex);
+
+    std::vector<std::shared_lock<std::shared_mutex>> neighbor_locks;
+    for (int i = 0; i < 6; ++i) {
+        if (mesh_job.do_neighbour_exists[i]) {
+            neighbor_locks.emplace_back(mesh_job.neighbour_chunks[i]->m_block_mutex);
+        }
+    }
     std::vector<float> vertices;
     std::vector<float> texcoords;
     std::vector<unsigned short> indices;
     std::vector<unsigned char> shades;
     World::ChunkPos chunk_pos = mesh_job.chunk_pos;
-    // auto chunk = mesh_job.chunks.find(chunk_pos);
-    // auto& blocks = chunk->second.m_blocks;
-    std::vector<Block> blocks = mesh_job.center_blocks;
-    Block* current_block = &blocks[0];
+    const Block* current_block = mesh_job.center_chunk->m_blocks.data();
 
     int indice_counter = 0;
     for (int x = 0; x < 16; ++x){
@@ -58,7 +65,7 @@ void Renderer::update_mesh_chunk(MeshJob mesh_job, ThreadPool::SafeQueue<MeshRes
                         add_face(2, x, y, z, current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter);
                     }
                     if (mesh_job.do_neighbour_exists[0]){
-                        if (x == 0  and mesh_job.neighbour_blocks[0][z + y * 16 + (15)*256].m_material_type == 0){
+                        if (x == 0  and mesh_job.neighbour_chunks[0]->m_blocks[z + y * 16 + (15)*256].m_material_type == 0){
                             add_face(2, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter);
                         }
 
@@ -70,7 +77,7 @@ void Renderer::update_mesh_chunk(MeshJob mesh_job, ThreadPool::SafeQueue<MeshRes
                         add_face(3, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter);
                     }
                     if (mesh_job.do_neighbour_exists[1]){
-                        if (x == 15  and mesh_job.neighbour_blocks[1][z + y * 16 + (0)*256].m_material_type == 0){
+                        if (x == 15  and mesh_job.neighbour_chunks[1]->m_blocks[z + y * 16 + (0)*256].m_material_type == 0){
                             add_face(3, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter);
                             }
                     } else if (x == 15){
@@ -81,7 +88,7 @@ void Renderer::update_mesh_chunk(MeshJob mesh_job, ThreadPool::SafeQueue<MeshRes
                         add_face(1, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter);
                     }
                     if (mesh_job.do_neighbour_exists[2]){
-                        if (z == 0  and mesh_job.neighbour_blocks[2][15 + y * 16 + x*256].m_material_type == 0){
+                        if (z == 0  and mesh_job.neighbour_chunks[2]->m_blocks[15 + y * 16 + x*256].m_material_type == 0){
                             add_face(1, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter);
                             }
                     } else if (z == 0){
@@ -92,7 +99,7 @@ void Renderer::update_mesh_chunk(MeshJob mesh_job, ThreadPool::SafeQueue<MeshRes
                         add_face(0, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter);
                     }
                     if (mesh_job.do_neighbour_exists[3]){
-                        if (z == 15  and mesh_job.neighbour_blocks[3][0 + y * 16 + x*256].m_material_type == 0){
+                        if (z == 15  and mesh_job.neighbour_chunks[3]->m_blocks[0 + y * 16 + x*256].m_material_type == 0){
                             add_face(0, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter);
                             }
                     } else if (z == 15){
@@ -103,7 +110,7 @@ void Renderer::update_mesh_chunk(MeshJob mesh_job, ThreadPool::SafeQueue<MeshRes
                         add_face(5, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter);
                     }
                     if (mesh_job.do_neighbour_exists[4]){
-                        if (y == 0  and mesh_job.neighbour_blocks[4][z + (15) * 16 + x*256].m_material_type == 0){
+                        if (y == 0  and mesh_job.neighbour_chunks[4]->m_blocks[z + (15) * 16 + x*256].m_material_type == 0){
                             add_face(5, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter);
                             }
                     } else if (y == 0){
@@ -114,7 +121,7 @@ void Renderer::update_mesh_chunk(MeshJob mesh_job, ThreadPool::SafeQueue<MeshRes
                         add_face(4, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter);
                     }
                     if (mesh_job.do_neighbour_exists[5]){
-                        if (y == 15  and mesh_job.neighbour_blocks[5][z + (0) * 16 + x*256].m_material_type == 0){
+                        if (y == 15  and mesh_job.neighbour_chunks[5]->m_blocks[z + (0) * 16 + x*256].m_material_type == 0){
                             add_face(4, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter);
                             }
                     } else if (y == 15){
@@ -272,26 +279,38 @@ void Renderer::update_mesh(Vector3 player_pos){
         }
 
         m_chunk_meshes[chunk_pos] = cubeMesh;
-        Game::Get().m_world.m_chunks[chunk_pos]->m_is_meshing = false;
+
+        auto it = Game::Get().m_world.m_chunks.find(chunk_pos);
+        if (it != Game::Get().m_world.m_chunks.end()) {
+            it->second->m_is_meshing = false;
+        }
 
     }
 
     World::ChunkPos chunk_pos = World::get_chunk_position(player_pos);
     int render_distance = Game::Get().RENDER_DISTANCE;
     bool needs_sorting = false;
-    for (auto& pair : Game::Get().m_world.m_chunks) {
-        World::ChunkPos position = pair.first;
-        auto& chunk = pair.second;
 
-        if (std::abs(position.x - chunk_pos.x) <= render_distance &&
-            std::abs(position.z - chunk_pos.z) <= render_distance) {
 
-            if (!m_chunk_meshes.contains(position) && !chunk->m_is_meshing && !chunk->m_is_generating) {
-                m_queue_to_mesh.push_back(position);
-                chunk->m_is_meshing = true;
-                needs_sorting = true;
+
+
+    for (int x = chunk_pos.x - render_distance; x <= chunk_pos.x + render_distance; ++x) {
+        for (int z = chunk_pos.z - render_distance; z <= chunk_pos.z + render_distance; ++z) {
+            for (int y = 0; y < World::WORLD_CHUNK_HEIGHT; ++y) {
+
+                World::ChunkPos pos = {x, y, z};
+                auto it = Game::Get().m_world.m_chunks.find(pos);
+
+                if (it != Game::Get().m_world.m_chunks.end()) {
+                    auto& chunk = it->second;
+                    if (!m_chunk_meshes.contains(pos) && !chunk->m_is_meshing && !chunk->m_is_generating) {
+                        m_queue_to_mesh.push_back(pos);
+                        chunk->m_is_meshing = true;
+                        needs_sorting = true;
+                    }
+                }
             }
-            }
+        }
     }
 
     if (needs_sorting) {
@@ -306,7 +325,7 @@ void Renderer::update_mesh(Vector3 player_pos){
         });
     }
 
-    int max_sends = 12;
+    int max_sends = 3;
     int sent_this_frame = 0;
     while (!m_queue_to_mesh_priority.empty()){
         World::ChunkPos pos_queue = m_queue_to_mesh_priority.front();

@@ -11,13 +11,13 @@
 void Game::init() {
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(1700, 900, "3d_game");
+    SetTraceLogLevel(LOG_WARNING);
     // ToggleBorderlessWindowed();
 
     SetTargetFPS(165);
     HideCursor();
     ResourceManager::Get().init();
     m_renderer.update_mesh(m_player.m_camera.position);
-
 }
 
 void Game::main_loop() {
