@@ -26,17 +26,7 @@ Player::Player(){
 void Player::update_position(){
     Vector2 mouseDelta = GetMouseDelta();
     SetMousePosition(250, 250);
-    // if (IsKeyDown(KEY_W)) {m_velocity.x = m_speed_adjust;}
-    // if (IsKeyDown(KEY_S)) {m_velocity.x = -m_speed_adjust;}
-    // if (!IsKeyDown(KEY_W) and !IsKeyDown(KEY_S)) {m_velocity.x = 0;}
-    //
-    // if (IsKeyDown(KEY_A)) {m_velocity.y = -m_speed_adjust;}
-    // if (IsKeyDown(KEY_D)) {m_velocity.y = m_speed_adjust;}
-    // if (!IsKeyDown(KEY_A) and !IsKeyDown(KEY_D)) {m_velocity.y = 0;}
-    //
-    // if (IsKeyDown(KEY_LEFT_SHIFT)) {m_velocity.z = -m_speed_adjust;}
-    // if (IsKeyDown(KEY_SPACE)) {m_velocity.z = m_speed_adjust;}
-    // if (!IsKeyDown(KEY_LEFT_SHIFT) and !IsKeyDown(KEY_SPACE)) {m_velocity.z = 0;}
+
     m_speed_adjust += 1 * GetMouseWheelMove();
 
     UpdateCameraPro(&m_camera, {0,0, 0},

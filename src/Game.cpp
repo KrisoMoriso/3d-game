@@ -9,8 +9,10 @@
 #include "rlgl.h"
 
 void Game::init() {
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(1700, 900, "3d_game");
     // ToggleBorderlessWindowed();
+
     SetTargetFPS(165);
     HideCursor();
     ResourceManager::Get().init();

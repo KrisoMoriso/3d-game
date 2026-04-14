@@ -278,22 +278,33 @@ void Renderer::update_mesh(Vector3 player_pos){
 
     World::ChunkPos chunk_pos = World::get_chunk_position(player_pos);
     int render_distance = Game::Get().RENDER_DISTANCE;
-    if (chunk_pos != m_last_player_chunk){
-    }
-        for (int x = chunk_pos.x - render_distance; x < chunk_pos.x + render_distance; ++x){
-            for (int y = 0; y < World::WORLD_CHUNK_HEIGHT; ++y){
-                for (int z = chunk_pos.z - render_distance; z < chunk_pos.z + render_distance; ++z){
-                    World::ChunkPos position = {x, y, z};
-                    if (!m_chunk_meshes.contains(position) and Game::Get().m_world.m_chunks.contains(position)){
-                        if (!Game::Get().m_world.m_chunks[position]->m_is_meshing and !Game::Get().m_world.m_chunks[position]->m_is_generating){
-                            m_queue_to_mesh.emplace(position);
-                            Game::Get().m_world.m_chunks[position]->m_is_meshing = true;
-                        }
-                    }
-                }
+    bool needs_sorting = false;
+    for (auto& pair : Game::Get().m_world.m_chunks) {
+        World::ChunkPos position = pair.first;
+        auto& chunk = pair.second;
+
+        if (std::abs(position.x - chunk_pos.x) <= render_distance &&
+            std::abs(position.z - chunk_pos.z) <= render_distance) {
+
+            if (!m_chunk_meshes.contains(position) && !chunk->m_is_meshing && !chunk->m_is_generating) {
+                m_queue_to_mesh.push_back(position);
+                chunk->m_is_meshing = true;
+                needs_sorting = true;
+            }
             }
     }
 
+    if (needs_sorting) {
+        std::sort(m_queue_to_mesh.begin(), m_queue_to_mesh.end(),
+            [chunk_pos](const World::ChunkPos& a, const World::ChunkPos& b) {
+
+                int distA = (a.x - chunk_pos.x)*(a.x - chunk_pos.x) + (a.z - chunk_pos.z)*(a.z - chunk_pos.z);
+                int distB = (b.x - chunk_pos.x)*(b.x - chunk_pos.x) + (b.z - chunk_pos.z)*(b.z - chunk_pos.z);
+
+
+                return distA > distB;
+        });
+    }
 
     int max_sends = 12;
     int sent_this_frame = 0;
@@ -304,8 +315,8 @@ void Renderer::update_mesh(Vector3 player_pos){
         sent_this_frame++;
     }
     while (!m_queue_to_mesh.empty() and sent_this_frame < max_sends){
-        World::ChunkPos pos_queue = m_queue_to_mesh.front();
-        m_queue_to_mesh.pop();
+        World::ChunkPos pos_queue = m_queue_to_mesh.back();
+        m_queue_to_mesh.pop_back();
         send_chunk_to_thread(pos_queue, false);
         sent_this_frame++;
     }

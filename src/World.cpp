@@ -3,6 +3,7 @@
 #include "Game.h"
 #define FASTNOISELITE_IMPLEMENTATION
 #include "FastNoiseLite.h"
+#include <cmath>
 World::World()
 {
 
@@ -21,49 +22,106 @@ World::World()
 
 void World::generate_world(Vector3 player_position){
      ChunkPos chunk_pos = get_chunk_position(player_position);
-    int render_distance = Game::Get().RENDER_DISTANCE + 2;
-    if (chunk_pos != m_last_player_chunk or true){
-        for (int x = chunk_pos.x - render_distance; x < chunk_pos.x + render_distance; ++x){
-            for (int y = 0; y < WORLD_CHUNK_HEIGHT; ++y){
-                for (int z = chunk_pos.z - render_distance; z < chunk_pos.z + render_distance; ++z){
-                    ChunkPos position = {x, y, z};
-                    if (!m_chunks.contains(position)){
-                        m_chunks[position] = std::make_unique<Chunk>();
-                        m_chunks[position]->m_is_generating = true;
-                        m_queue_to_generate.emplace(position);
-                    }
-                }
+
+    RadarResult radar_result;
+    if (m_radar_results.try_pop(radar_result)) {
+
+
+        int deleted = 0;
+        for (const auto& pos : radar_result.chunks_to_remove) {
+            if (deleted >= 4) break;
+
+            if (m_chunks.contains(pos) && !m_chunks[pos]->m_is_generating) {
+                m_chunks.erase(pos);
+                deleted++;
             }
         }
-}
+        for (const auto& pos : m_queue_to_generate) {
+            m_chunks_in_progress.erase(pos);
+        }
+        m_queue_to_generate.clear();
+        for (const auto& pos : radar_result.chunks_to_generate) {
+            if (!m_chunks.contains(pos) && !m_chunks_in_progress.contains(pos)) {
+                m_queue_to_generate.push_back(pos);
+                m_chunks_in_progress.insert(pos);
+            }
+        }
+    }
 
-    int constexpr max_generates = 24;
+
+    if (chunk_pos != m_last_player_chunk) {
+
+
+        std::vector<ChunkPos> active_keys;
+        active_keys.reserve(m_chunks.size());
+        for (const auto& pair : m_chunks) {
+            active_keys.push_back(pair.first);
+        }
+
+        RadarJob job = {chunk_pos, Game::Get().RENDER_DISTANCE, std::move(active_keys)};
+
+        Game::Get().m_thread_pool.enqueue([this, job]() {
+            this->perform_radar_job(job, m_radar_results);
+        });
+
+        m_last_player_chunk = chunk_pos;
+    }
+
+
+    int constexpr max_generates = 4;
     int generates_this_frame = 0;
-    while (!m_queue_to_generate.empty() and generates_this_frame < max_generates){
-        ChunkPos pos_queue = m_queue_to_generate.front();
-        m_queue_to_generate.pop();
+    while (!m_queue_to_generate.empty() && generates_this_frame < max_generates) {
+        ChunkPos pos_queue = m_queue_to_generate.back();
+        m_queue_to_generate.pop_back();
+
         GenerationJob job = {pos_queue};
-        Game::Get().m_thread_pool.enqueue([this, job](){
+        Game::Get().m_thread_pool.enqueue([this, job]() {
             this->generate_chunk(job, m_queue_generation_result);
         });
+
         generates_this_frame++;
     }
+
+
     GenerationResult finished_result;
-    while (m_queue_generation_result.try_pop(finished_result)){
+    int constexpr max_finishes = 4;
+    int finishes = 0;
+
+    while (m_queue_generation_result.try_pop(finished_result) && finishes < max_finishes) {
+
         m_chunks[finished_result.chunk_pos] = std::move(finished_result.chunk);
         m_chunks[finished_result.chunk_pos]->m_is_generating = false;
+        m_chunks_in_progress.erase(finished_result.chunk_pos);
+        finishes++;
     }
-
 }
 
 void World::generate_chunk(GenerationJob generation_job,
     ThreadPool::SafeQueue<GenerationResult>& queue_generation_result){
-    FastNoiseLite noise_lite;
-    noise_lite.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
-    noise_lite.SetSeed(Game::Get().WORLD_SEED);
-    noise_lite.SetFrequency(0.005f);
-    noise_lite.SetFractalType(FastNoiseLite::FractalType_FBm);
-    noise_lite.SetFractalOctaves(4);
+
+    FastNoiseLite noise_macro;
+    noise_macro.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
+    noise_macro.SetSeed(Game::Get().WORLD_SEED);
+    noise_macro.SetFrequency(0.003f);
+    noise_macro.SetFractalType(FastNoiseLite::FractalType_FBm);
+    noise_macro.SetFractalOctaves(3);
+
+    FastNoiseLite noise_micro;
+    noise_micro.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
+    noise_micro.SetSeed(Game::Get().WORLD_SEED + 1);
+    noise_micro.SetFrequency(0.005f);// smaller frequency for smaller bumps
+
+    FastNoiseLite noise_caves;
+    noise_caves.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
+    noise_caves.SetSeed(Game::Get().WORLD_SEED + 2);
+    noise_caves.SetFrequency(0.015f); // frequency determines how tight the tunnels twist
+    noise_caves.SetFractalType(FastNoiseLite::FractalType_FBm);
+    noise_caves.SetFractalOctaves(2);
+
+    FastNoiseLite noise_cave_mask;
+    noise_cave_mask.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
+    noise_cave_mask.SetSeed(Game::Get().WORLD_SEED + 3);
+    noise_cave_mask.SetFrequency(0.005f);
 
     GenerationResult result;
     result.chunk_pos = generation_job.chunk_pos;
@@ -74,58 +132,124 @@ void World::generate_chunk(GenerationJob generation_job,
             int world_x = result.chunk_pos.x * 16 + x;
             int world_z = result.chunk_pos.z * 16 + z;
 
-            // 1. Get 2D noise (returns -1.0 to 1.0)
-            float noise_val = noise_lite.GetNoise((float)world_x, (float)world_z);
+            float val_macro = noise_macro.GetNoise((float)world_x, (float)world_z);
+            float val_micro = noise_micro.GetNoise((float)world_x, (float)world_z);
 
-            // 2. Calculate the surface height
+            float shaped_macro = val_macro * val_macro * val_macro;
+
+
             int base_height = 80;
-            int height_variation = 16;
-            int surface_y = base_height + (int)(noise_val * height_variation);
-
+            int surface_y = base_height + (int)(shaped_macro * 60.0f) + (int)(val_micro * 6.0f);
+            constexpr int SAND_LEVEL = 35;
+            constexpr int MOUNTAIN_LEVEL = 110;
 
             for (int y = 0; y <= 15; ++y) {
                 int world_y = result.chunk_pos.y * 16 + y;
+                unsigned short current_material = BLOCK_MATERIALS::AIR;
 
-                if (world_y <= surface_y){
-                    result.chunk->setBlock(x, y, z, BLOCK_MATERIALS::STONE);
-                } else{
-                    result.chunk->setBlock(x, y, z, BLOCK_MATERIALS::AIR);
+                if (world_y > surface_y){
+                    current_material = BLOCK_MATERIALS::AIR;
                 }
-            }
-        }
-    }
-    for (int x = 0; x <= 15; ++x) {
-        for (int y = 2; y <= 14; ++y) {
-            for (int z = 0; z <= 15; ++z) {
-                int world_y = result.chunk_pos.y * 16 + y;
-                if (result.chunk->getBlockMaterial(x, y, z) == BLOCK_MATERIALS::STONE and result.chunk->getBlockMaterial(x, y + 1, z) == BLOCK_MATERIALS::AIR ){
-                    if (world_y <= 80){
-                        result.chunk->setBlock(x, y, z, BLOCK_MATERIALS::SAND);
-                        result.chunk->setBlock(x, y - 1, z, BLOCK_MATERIALS::SAND);
-                        result.chunk->setBlock(x, y - 2, z, BLOCK_MATERIALS::SAND);
+                else if (world_y == surface_y){
+                    if (world_y < SAND_LEVEL){
+                        current_material = BLOCK_MATERIALS::SAND;
+
+                    } else if (surface_y > MOUNTAIN_LEVEL){
+                        current_material = BLOCK_MATERIALS::STONE;
                     } else{
-                        result.chunk->setBlock(x, y, z, BLOCK_MATERIALS::GRASS_BLOCK);
-                        result.chunk->setBlock(x, y - 1, z, BLOCK_MATERIALS::DIRT);
-                        result.chunk->setBlock(x, y - 2, z, BLOCK_MATERIALS::DIRT);
-
+                        current_material = BLOCK_MATERIALS::GRASS_BLOCK;
                     }
+                }
+                else if (world_y > surface_y -4){
+                    if (surface_y < SAND_LEVEL){
+                        current_material = BLOCK_MATERIALS::SAND;
+                    } else if (surface_y > MOUNTAIN_LEVEL){
+                        current_material = BLOCK_MATERIALS::STONE;
+                    } else{
+                        current_material = BLOCK_MATERIALS::DIRT;
+                    }
+                } else{
+                        current_material = BLOCK_MATERIALS::STONE;
 
                 }
+
+                if (current_material != BLOCK_MATERIALS::AIR) {
+
+                    float mask_val = noise_cave_mask.GetNoise((float)world_x, (float)world_y, (float)world_z);
+
+                    if (mask_val > 0.4f) {
+
+                        float cave_val = noise_caves.GetNoise((float)world_x, (float)world_y, (float)world_z);
+
+                        float base_threshold = 0.12f;
+
+                        float carve_threshold = base_threshold * mask_val;
+
+                        int depth_from_surface = surface_y - world_y;
+                        if (depth_from_surface <= 5) {
+                            carve_threshold += (5 - depth_from_surface) * 0.008f;
+                        }
+
+                        if (std::abs(cave_val) < carve_threshold) {
+                            current_material = BLOCK_MATERIALS::AIR;
+                        }
+                    }
+                }
+                result.chunk->setBlock(x, y, z, current_material);
             }
         }
     }
-
-
 
     queue_generation_result.push(std::move(result));
 }
 
 
+void World::perform_radar_job(RadarJob job, ThreadPool::SafeQueue<RadarResult>& queue_radar_results){
+    RadarResult result;
+    int render_dist = job.render_distance + 2;
+
+    for (const auto& pos : job.active_chunk_keys) {
+        if (std::abs(pos.x - job.center_chunk.x) > render_dist ||
+            std::abs(pos.z - job.center_chunk.z) > render_dist) {
+            result.chunks_to_remove.push_back(pos);
+            }
+    }
+
+
+    for (int x = job.center_chunk.x - render_dist; x < job.center_chunk.x + render_dist; ++x) {
+        for (int y = 0; y < WORLD_CHUNK_HEIGHT; ++y) {
+            for (int z = job.center_chunk.z - render_dist; z < job.center_chunk.z + render_dist; ++z) {
+                result.chunks_to_generate.push_back({x, y, z});
+            }
+        }
+    }
+
+
+    std::sort(result.chunks_to_generate.begin(), result.chunks_to_generate.end(),
+        [&job](const ChunkPos& a, const ChunkPos& b) {
+            int distA = (a.x - job.center_chunk.x)*(a.x - job.center_chunk.x) +
+                        (a.z - job.center_chunk.z)*(a.z - job.center_chunk.z);
+            int distB = (b.x - job.center_chunk.x)*(b.x - job.center_chunk.x) +
+                        (b.z - job.center_chunk.z)*(b.z - job.center_chunk.z);
+            return distA > distB;
+    });
+
+
+    queue_radar_results.push(std::move(result));
+}
+
+
+
+
+
+
+
+
 World::ChunkPos World::get_chunk_position(Vector3 position){
     ChunkPos chunk_pos;
-    chunk_pos.x = (int)position.x >> 4;
-    chunk_pos.y = (int)position.y >> 4;
-    chunk_pos.z = (int)position.z >> 4;
+    chunk_pos.x = static_cast<int>(std::floor(position.x / 16.0f));
+    chunk_pos.y = static_cast<int>(std::floor(position.y / 16.0f));
+    chunk_pos.z = static_cast<int>(std::floor(position.z / 16.0f));
     return chunk_pos;
 }
 

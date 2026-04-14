@@ -69,7 +69,7 @@ public:
     void update_block_meshes(World::ChunkPos chunk_pos, int local_x, int local_y, int local_z);
     ThreadPool::SafeQueue<MeshResult> m_result_queue;
     ThreadPool::SafeQueue<MeshResult> m_result_queue_priority;
-    std::queue<World::ChunkPos> m_queue_to_mesh;
+    std::vector<World::ChunkPos> m_queue_to_mesh;
     std::queue<World::ChunkPos> m_queue_to_mesh_priority;
     World::ChunkPos m_last_player_chunk;
     std::vector<World::ChunkPos> m_chunks_to_unload;
