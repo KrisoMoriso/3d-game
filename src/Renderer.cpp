@@ -7,6 +7,26 @@
 #include "raymath.h"
 #include "ResourceManager.h"
 
+bool Renderer::are_chunk_neighbours_ready(World::ChunkPos chunk_pos){
+    const World::ChunkPos offsets[6] = {
+        {chunk_pos.x - 1, chunk_pos.y, chunk_pos.z}, // Left
+        {chunk_pos.x + 1, chunk_pos.y, chunk_pos.z}, // Right
+        {chunk_pos.x, chunk_pos.y, chunk_pos.z - 1},  // Back
+        {chunk_pos.x, chunk_pos.y, chunk_pos.z + 1}, // Front
+        {chunk_pos.x, chunk_pos.y - 1, chunk_pos.z}, // Bottom
+        {chunk_pos.x, chunk_pos.y + 1, chunk_pos.z} // Top
+    };
+    for (const auto& offset : offsets){
+        auto it_neighbour_chunk = Game::Get().m_world.m_chunks.find(offset);
+
+        if (it_neighbour_chunk != Game::Get().m_world.m_chunks.end() and !it_neighbour_chunk->second->m_is_generating){
+        } else{
+            return false;
+        }
+    }
+    return true;
+}
+
 Renderer::MeshJob Renderer::pack_mesh_job(World::ChunkPos chunk_pos){
     MeshJob mesh_job;
     mesh_job.chunk_pos = chunk_pos;
@@ -62,70 +82,70 @@ void Renderer::update_mesh_chunk(MeshJob mesh_job, ThreadPool::SafeQueue<MeshRes
                     //check if block is at chunk edge
                     //check X-
                     if (x != 0 and (current_block-256)->m_material_type == 0){
-                        add_face(2, x, y, z, current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter);
+                        add_face(2, x, y, z, current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter, mesh_job);
                     }
                     if (mesh_job.do_neighbour_exists[0]){
                         if (x == 0  and mesh_job.neighbour_chunks[0]->m_blocks[z + y * 16 + (15)*256].m_material_type == 0){
-                            add_face(2, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter);
+                            add_face(2, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter, mesh_job);
                         }
 
                     } else if (x == 0){
-                        add_face(2, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter);
+                        add_face(2, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter, mesh_job);
                     }
                     //X+
                     if (x != 15 and (current_block+256)->m_material_type == 0){
-                        add_face(3, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter);
+                        add_face(3, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter, mesh_job);
                     }
                     if (mesh_job.do_neighbour_exists[1]){
                         if (x == 15  and mesh_job.neighbour_chunks[1]->m_blocks[z + y * 16 + (0)*256].m_material_type == 0){
-                            add_face(3, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter);
+                            add_face(3, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter, mesh_job);
                             }
                     } else if (x == 15){
-                        add_face(3, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter);
+                        add_face(3, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter, mesh_job);
                     }
                     //Z-
                     if (z != 0 and (current_block-1)->m_material_type == 0){
-                        add_face(1, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter);
+                        add_face(1, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter, mesh_job);
                     }
                     if (mesh_job.do_neighbour_exists[2]){
                         if (z == 0  and mesh_job.neighbour_chunks[2]->m_blocks[15 + y * 16 + x*256].m_material_type == 0){
-                            add_face(1, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter);
+                            add_face(1, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter, mesh_job);
                             }
                     } else if (z == 0){
-                        add_face(1, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter);
+                        add_face(1, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter, mesh_job);
                     }
                     //z+
                     if (z != 15 and (current_block+1)->m_material_type == 0){
-                        add_face(0, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter);
+                        add_face(0, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter, mesh_job);
                     }
                     if (mesh_job.do_neighbour_exists[3]){
                         if (z == 15  and mesh_job.neighbour_chunks[3]->m_blocks[0 + y * 16 + x*256].m_material_type == 0){
-                            add_face(0, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter);
+                            add_face(0, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter, mesh_job);
                             }
                     } else if (z == 15){
-                        add_face(0, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter);
+                        add_face(0, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter, mesh_job);
                     }
                     //Y-
                     if (y != 0 and (current_block-16)->m_material_type == 0){
-                        add_face(5, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter);
+                        add_face(5, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter, mesh_job);
                     }
                     if (mesh_job.do_neighbour_exists[4]){
                         if (y == 0  and mesh_job.neighbour_chunks[4]->m_blocks[z + (15) * 16 + x*256].m_material_type == 0){
-                            add_face(5, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter);
+                            add_face(5, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter, mesh_job);
                             }
                     } else if (y == 0){
-                        add_face(5, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter);
+                        add_face(5, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter, mesh_job);
                     }
                     //y+
                     if (y != 15 and (current_block+16)->m_material_type == 0){
-                        add_face(4, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter);
+                        add_face(4, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter, mesh_job);
                     }
                     if (mesh_job.do_neighbour_exists[5]){
                         if (y == 15  and mesh_job.neighbour_chunks[5]->m_blocks[z + (0) * 16 + x*256].m_material_type == 0){
-                            add_face(4, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter);
+                            add_face(4, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter, mesh_job);
                             }
                     } else if (y == 15){
-                        add_face(4, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter);
+                        add_face(4, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter, mesh_job);
                     }
 
                 }
@@ -143,13 +163,13 @@ void Renderer::update_mesh_chunk(MeshJob mesh_job, ThreadPool::SafeQueue<MeshRes
 }
 
 void Renderer::add_face(int face_id, int x, int y, int z,
-    unsigned short block_material,
-    std::vector<float>& vertices,
-    std::vector<float>& texcoords,
-    std::vector<unsigned short>& indices,
-    std::vector<unsigned char>& shades,
-    int& indice_counter
-    ){
+                        unsigned short block_material,
+                        std::vector<float>& vertices,
+                        std::vector<float>& texcoords,
+                        std::vector<unsigned short>& indices,
+                        std::vector<unsigned char>& shades,
+                        int& indice_counter, const MeshJob& job
+){
     vertices.reserve(12);
     for (int i = 0; i < 4; ++i){
         vertices.push_back(m_face_vertices[face_id][i].x + x);
@@ -157,13 +177,32 @@ void Renderer::add_face(int face_id, int x, int y, int z,
         vertices.push_back(m_face_vertices[face_id][i].z + z);
     }
     shades.reserve(16);
-    for (int i = 0; i < 4; ++i){
-        shades.push_back(m_shades[face_id]);
-        shades.push_back(m_shades[face_id]);
-        shades.push_back(m_shades[face_id]);
-        shades.push_back(255);
+    // for (int i = 0; i < 4; ++i){
+    //     shades.push_back(m_shades[face_id]);
+    //     shades.push_back(m_shades[face_id]);
+    //     shades.push_back(m_shades[face_id]);
+    //     shades.push_back(255);
+    //
+    // }
 
+    unsigned char face_shade = m_shades[face_id];
+    for (int i = 0; i < 4; ++i){
+        const auto& aov = ao_neighbors[face_id][i];
+        unsigned char ao = compute_ao(job, x, y, z,
+            aov.s1.dx, aov.s1.dy, aov.s1.dz,
+            aov.s2.dx, aov.s2.dy, aov.s2.dz,
+            aov.corner.dx, aov.corner.dy, aov.corner.dz);
+
+        // Combine face directional shade with AO (multiply, keep in 0-255)
+        unsigned char combined = (unsigned char)((int)face_shade * ao / 255);
+
+        shades.push_back(combined);
+        shades.push_back(combined);
+        shades.push_back(combined);
+        shades.push_back(255); // alpha
     }
+
+
 
     for (auto index : m_face_indices){ indices.push_back(index + indice_counter*4); }
     indice_counter++;
@@ -205,7 +244,43 @@ void Renderer::add_face(int face_id, int x, int y, int z,
 
 
 }
+bool Renderer::is_solid(const MeshJob& job, int x, int y, int z) {
+    if (x < 0 || x > 15 || y < 0 || y > 15 || z < 0 || z > 15) {
+        int ni = -1;
+        int nx = x, ny = y, nz = z;
 
+        if (x < 0)  { ni = 0; nx = 15; }
+        if (x > 15) { ni = 1; nx = 0;  }
+        if (z < 0)  { ni = 2; nz = 15; }
+        if (z > 15) { ni = 3; nz = 0;  }
+        if (y < 0)  { ni = 4; ny = 15; }
+        if (y > 15) { ni = 5; ny = 0;  }
+
+        if (ni == -1 || !job.do_neighbour_exists[ni]) return false;
+        return job.neighbour_chunks[ni]->m_blocks[nz + ny * 16 + nx * 256].m_material_type != World::BLOCK_MATERIALS::AIR;
+    }
+    return job.center_chunk->m_blocks[z + y * 16 + x * 256].m_material_type != World::BLOCK_MATERIALS::AIR;
+
+}
+unsigned char Renderer::compute_ao(const MeshJob& job, int x, int y, int z,
+    int dx1, int dy1, int dz1,   // side 1
+    int dx2, int dy2, int dz2,   // side 2
+    int dcx, int dcy, int dcz)   // corner diagonal
+{
+    bool side1  = is_solid(job, x + dx1, y + dy1, z + dz1);
+    bool side2  = is_solid(job, x + dx2, y + dy2, z + dz2);
+    bool corner = is_solid(job, x + dcx, y + dcy, z + dcz);
+
+    int ao;
+    if (side1 && side2)
+        ao = 0;
+    else
+        ao = 3 - (int(side1) + int(side2) + int(corner));
+
+    // ao is 0..3; map to shade (e.g. 140, 175, 210, 255)
+    constexpr unsigned char ao_table[4] = { 140, 175, 210, 255 };
+    return ao_table[ao];
+}
 void Renderer::render_chunks(Vector3 player_pos)
 {
     World::ChunkPos player_chunk = World::get_chunk_position(player_pos);
@@ -303,7 +378,7 @@ void Renderer::update_mesh(Vector3 player_pos){
 
                 if (it != Game::Get().m_world.m_chunks.end()) {
                     auto& chunk = it->second;
-                    if (!m_chunk_meshes.contains(pos) && !chunk->m_is_meshing && !chunk->m_is_generating) {
+                    if (!m_chunk_meshes.contains(pos) and !chunk->m_is_meshing and !chunk->m_is_generating and are_chunk_neighbours_ready(pos)) {
                         m_queue_to_mesh.push_back(pos);
                         chunk->m_is_meshing = true;
                         needs_sorting = true;
@@ -375,19 +450,25 @@ void Renderer::update_mesh(Vector3 player_pos){
 
 }
 
-void Renderer::send_chunk_to_thread(World::ChunkPos chunk_pos, bool is_priority){
+bool Renderer::send_chunk_to_thread(World::ChunkPos chunk_pos, bool is_priority){
     MeshJob mesh_job = pack_mesh_job(chunk_pos);
-    if (!mesh_job.center_chunk) return;
+    if (!mesh_job.center_chunk) return false;
+    for (auto is : mesh_job.do_neighbour_exists){
+        mesh_job.center_chunk->m_is_meshing = false;
+        if (!is) return false;
+    }
     if (!is_priority){
         Game::Get().m_thread_pool.enqueue([this, mesh_job](){
            this->update_mesh_chunk(mesh_job, m_result_queue);
         });
+
 
     } else{
         Game::Get().m_thread_pool.enqueue([this, mesh_job](){
            this->update_mesh_chunk(mesh_job, m_result_queue_priority);
         });
     }
+    return true;
 }
 
 

@@ -53,18 +53,20 @@ public:
         std::shared_ptr<Chunk> neighbour_chunks[6];
         bool do_neighbour_exists[6];
     };
+
+    bool are_chunk_neighbours_ready(World::ChunkPos chunk_pos);
     MeshJob pack_mesh_job(World::ChunkPos chunk_pos);
     void update_mesh_chunk(MeshJob mesh_job, ThreadPool::SafeQueue<MeshResult>& result_queue);
     void update_mesh(Vector3 player_pos);
     void add_face(int face_id, int x, int y, int z,
-                    unsigned short block_material,
-                    std::vector<float>& vertices,
-                    std::vector<float>& texcoords,
-                    std::vector<unsigned short>& indices,
-                    std::vector<unsigned char>& shades,
-                    int& indice_counter);
+                  unsigned short block_material,
+                  std::vector<float>& vertices,
+                  std::vector<float>& texcoords,
+                  std::vector<unsigned short>& indices,
+                  std::vector<unsigned char>& shades,
+                  int& indice_counter, const MeshJob& job);
     void render_chunks(Vector3 player_pos);
-    void send_chunk_to_thread(World::ChunkPos chunk_pos, bool is_priority);
+    bool send_chunk_to_thread(World::ChunkPos chunk_pos, bool is_priority);
     void update_block_meshes(World::ChunkPos chunk_pos, int local_x, int local_y, int local_z);
     ThreadPool::SafeQueue<MeshResult> m_result_queue;
     ThreadPool::SafeQueue<MeshResult> m_result_queue_priority;
@@ -72,4 +74,50 @@ public:
     std::queue<World::ChunkPos> m_queue_to_mesh_priority;
     World::ChunkPos m_last_player_chunk;
     std::vector<World::ChunkPos> m_chunks_to_unload;
+private:
+    unsigned char compute_ao(const MeshJob& job, int x, int y, int z, int dx1, int dy1, int dz1, int dx2, int dy2,
+                             int dz2,
+                             int dcx, int dcy, int dcz);
+    bool is_solid(const MeshJob& job, int x, int y, int z);
+
+    struct AONeighbor { int dx, dy, dz; };
+    struct AOVertex { AONeighbor s1, s2, corner; };
+
+    const AOVertex ao_neighbors[6][4] = {
+        // Face 0: Z+ (front, normal +Z)
+        { { {-1,0,1},{0,-1,1},{-1,-1,1} },
+            { {1,0,1},{0,-1,1},{1,-1,1} },
+          { {1,0,1},{0,1,1},{1,1,1} },
+            { {-1,0,1},{0,1,1},{-1,1,1} } },
+        // Face 1: Z- (back, normal -Z)
+        { { {1,0,-1},{0,-1,-1},{1,-1,-1} },
+            { {-1,0,-1},{0,-1,-1},{-1,-1,-1} },
+          { {-1,0,-1},{0,1,-1},{-1,1,-1} },
+            { {1,0,-1},{0,1,-1},{1,1,-1} } },
+        // Face 2: X- (left, normal -X)
+        { { {-1,0,1},{-1,-1,0},{-1,-1,1} },
+            { {-1,0,-1},{-1,-1,0},{-1,-1,-1} },
+          { {-1,0,-1},{-1,1,0},{-1,1,-1} },
+            { {-1,0,1},{-1,1,0},{-1,1,1} } },
+        // Face 3: X+ (right, normal +X)
+        { { {1,0,-1},{1,-1,0},{1,-1,-1} },
+            { {1,0,1},{1,-1,0},{1,-1,1} },
+          { {1,0,1},{1,1,0},{1,1,1} },
+            { {1,0,-1},{1,1,0},{1,1,-1} } },
+        // Face 4: Y+ (top, normal +Y) - FIXED Z-OFFSETS
+    {
+            { {-1,1,0},{0,1,1},{-1,1,1} },  // V0 (0,1,1): Left & Front
+            { {1,1,0},{0,1,1},{1,1,1} },   // V1 (1,1,1): Right & Front
+            { {1,1,0},{0,1,-1},{1,1,-1} }, // V2 (1,1,0): Right & Back
+            { {-1,1,0},{0,1,-1},{-1,1,-1} } // V3 (0,1,0): Left & Back
+    },
+
+    // Face 5: Y- (bottom, normal -Y) - FIXED Z-OFFSETS
+    {
+            { {1,-1,0},{0,-1,-1},{1,-1,-1} }, // V0 (1,0,0): Right & Back
+            { {-1,-1,0},{0,-1,-1},{-1,-1,-1} },// V1 (0,0,0): Left & Back
+            { {-1,-1,0},{0,-1,1},{-1,-1,1} },  // V2 (0,0,1): Left & Front
+            { {1,-1,0},{0,-1,1},{1,-1,1} }    // V3 (1,0,1): Right & Front
+    },
+    };
 };
