@@ -37,4 +37,5 @@ void Game::main_loop() {
     DrawFPS(50, 100);
     DrawTexture(ResourceManager::Get().CROSSHAIR_TEXTURE, GetScreenWidth() / 2 - 3, GetScreenHeight() / 2 - 3, WHITE);
     EndDrawing();
+
 }

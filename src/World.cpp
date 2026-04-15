@@ -21,6 +21,11 @@ World::World()
 }
 
 void World::generate_world(Vector3 player_position){
+    // TraceLog(LOG_WARNING, "chunks: %d | meshes: %d | in_progress: %d | gen_queue: %d",
+    // (int)m_chunks.size(),
+    // (int)Game::Get().m_renderer.m_chunk_meshes.size(),
+    // (int)m_chunks_in_progress.size(),
+    // (int)m_queue_to_generate.size());
      ChunkPos chunk_pos = get_chunk_position(player_position);
 
     RadarResult radar_result;
@@ -29,7 +34,7 @@ void World::generate_world(Vector3 player_position){
 
         int deleted = 0;
         for (const auto& pos : radar_result.chunks_to_remove) {
-            if (deleted >= 4) break;
+            // if (deleted >= 4) break;
 
             if (m_chunks.contains(pos) && !m_chunks[pos]->m_is_generating) {
                 m_chunks.erase(pos);
@@ -50,7 +55,7 @@ void World::generate_world(Vector3 player_position){
     }
 
 
-    if (chunk_pos != m_last_player_chunk) {
+    if (chunk_pos != m_last_player_chunk or true) {
 
 
         std::vector<ChunkPos> active_keys;
@@ -100,12 +105,19 @@ void World::generate_world(Vector3 player_position){
 void World::generate_chunk(GenerationJob generation_job,
     ThreadPool::SafeQueue<GenerationResult>& queue_generation_result){
 
-    FastNoiseLite noise_macro;
+    FastNoiseLite noise_macro; //continentalism
     noise_macro.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
     noise_macro.SetSeed(Game::Get().WORLD_SEED);
-    noise_macro.SetFrequency(0.003f);
+    noise_macro.SetFrequency(0.0013f);
     noise_macro.SetFractalType(FastNoiseLite::FractalType_FBm);
     noise_macro.SetFractalOctaves(3);
+
+    // FastNoiseLite noise_macro2;
+    // noise_macro2.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
+    // noise_macro2.SetSeed(Game::Get().WORLD_SEED + 10);
+    // noise_macro2.SetFrequency(0.008f);
+    // noise_macro2.SetFractalType(FastNoiseLite::FractalType_Ridged);
+    // noise_macro2.SetFractalOctaves(2);
 
     FastNoiseLite noise_micro;
     noise_micro.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
@@ -136,10 +148,11 @@ void World::generate_chunk(GenerationJob generation_job,
             float val_macro = noise_macro.GetNoise((float)world_x, (float)world_z);
             float val_micro = noise_micro.GetNoise((float)world_x, (float)world_z);
 
-            float shaped_macro = val_macro * val_macro * val_macro;
-
-
-            int base_height = 80;
+            // int macro_sign = val_macro > 0 ? 1 : -1;
+            // float shaped_macro = val_macro * val_macro * macro_sign;
+            // float shaped_macro = val_macro;
+            float shaped_macro = val_macro - std::abs(val_micro) * 0.3f;
+            int base_height = 90;
             int surface_y = base_height + (int)(shaped_macro * 60.0f) + (int)(val_micro * 6.0f);
             constexpr int SAND_LEVEL = 35;
             constexpr int MOUNTAIN_LEVEL = 110;
