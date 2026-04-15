@@ -33,6 +33,7 @@ void World::generate_world(Vector3 player_position){
 
             if (m_chunks.contains(pos) && !m_chunks[pos]->m_is_generating) {
                 m_chunks.erase(pos);
+                Game::Get().m_renderer.m_chunks_to_unload.push_back(pos);
                 deleted++;
             }
         }
@@ -83,7 +84,7 @@ void World::generate_world(Vector3 player_position){
     }
 
 
-    GenerationResult finished_result;
+     GenerationResult finished_result;
     int constexpr max_finishes = 4;
     int finishes = 0;
 

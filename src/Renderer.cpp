@@ -252,7 +252,7 @@ void Renderer::update_mesh(Vector3 player_pos){
         Game::Get().m_world.m_chunks[chunk_pos]->m_is_meshing = false;
 
     }
-    if (m_result_queue.try_pop(finished_mesh)){
+    while (m_result_queue.try_pop(finished_mesh)){
         std::vector<float> vertices = finished_mesh.vertices;
         std::vector<float> texcoords = finished_mesh.texcoords;
         std::vector<unsigned short> indices = finished_mesh.indices;
@@ -341,17 +341,17 @@ void Renderer::update_mesh(Vector3 player_pos){
     }
 
 
-    if (chunk_pos != m_last_player_chunk){
-        for (const auto& pair : m_chunk_meshes){
-            if (!(pair.first.x >= chunk_pos.x - render_distance and pair.first.x <= chunk_pos.x + render_distance
-                and pair.first.z >= chunk_pos.z - render_distance and pair.first.z <= chunk_pos.z + render_distance
-                )){
-                m_chunks_to_unload.push_back(pair.first);
-            }
-
-    }
-        m_last_player_chunk = chunk_pos;
-    }
+    // if (chunk_pos != m_last_player_chunk){
+    //     for (const auto& pair : m_chunk_meshes){
+    //         if (!(pair.first.x >= chunk_pos.x - render_distance and pair.first.x <= chunk_pos.x + render_distance
+    //             and pair.first.z >= chunk_pos.z - render_distance and pair.first.z <= chunk_pos.z + render_distance
+    //             )){
+    //             m_chunks_to_unload.push_back(pair.first);
+    //         }
+    //
+    // }
+    //     m_last_player_chunk = chunk_pos;
+    // }
     int unloaded_this_frame = 0;
     int max_unloads = 2;
     while (!m_chunks_to_unload.empty() and unloaded_this_frame < max_unloads){
@@ -377,6 +377,7 @@ void Renderer::update_mesh(Vector3 player_pos){
 
 void Renderer::send_chunk_to_thread(World::ChunkPos chunk_pos, bool is_priority){
     MeshJob mesh_job = pack_mesh_job(chunk_pos);
+    if (!mesh_job.center_chunk) return;
     if (!is_priority){
         Game::Get().m_thread_pool.enqueue([this, mesh_job](){
            this->update_mesh_chunk(mesh_job, m_result_queue);
