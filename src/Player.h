@@ -20,5 +20,5 @@ public:
         return static_cast<int>(std::floor(val));
     }
     bool check_collision_AABB();
-    void update_physics();
+    void update_physics(bool enable_player_collision);
 };

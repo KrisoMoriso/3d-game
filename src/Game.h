@@ -25,8 +25,9 @@ public:
     Renderer m_renderer;
     Player m_player;
     ThreadPool m_thread_pool;
-    const int RENDER_DISTANCE = 8;
+    const int RENDER_DISTANCE = 14;
     const int WORLD_SEED = 12521;
+    bool m_enable_player_collision = true;
 private:
     Game() : m_thread_pool(6)
     {}

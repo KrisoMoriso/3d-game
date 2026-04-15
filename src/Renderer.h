@@ -8,38 +8,9 @@
 class Renderer {
 public:
 
-
     Renderer(){}
     Model m_cube_model;
     std::unordered_map<World::ChunkPos, Mesh, World::ChunkPosHash> m_chunk_meshes;
-    const Vector3 m_face_vertices[6][4]{
-        { {0,0,1}, {1,0,1}, {1,1,1}, {0,1,1} }, // Front (Z+)
-        { {1,0,0}, {0,0,0}, {0,1,0}, {1,1,0} }, // Back (Z-)
-        { {0,0,0}, {0,0,1}, {0,1,1}, {0,1,0} }, // Left (X-)
-        { {1,0,1}, {1,0,0}, {1,1,0}, {1,1,1} }, // Right (X+)
-        { {0,1,1}, {1,1,1}, {1,1,0}, {0,1,0} }, // Top (Y+)
-        { {0,0,0}, {1,0,0}, {1,0,1}, {0,0,1} }  // Bottom (Y-)
-    };
-    const unsigned short m_face_indices[6]
-    {
-        0, 1, 2,  // First triangle
-        0, 2, 3   // Second triangle
-    };
-    const float m_face_UVs[4][2]
-    {
-    {1.0f, 1.0f}, // Top-Right
-    {0.0f, 1.0f}, // Top-Left
-        {0.0f, 0.0f}, // Bottom-Left  u  v
-    {1.0f, 0.0f} // Bottom-Right
-    };
-    const unsigned char m_shades[6]{
-        200,
-        160,
-        200,
-        160,
-        255,
-        130
-    };
     struct MeshResult{
         std::vector<float> vertices;
         std::vector<float> texcoords;
@@ -125,4 +96,40 @@ private:
             { {1,-1,0},{0,-1,1},{1,-1,1} }    // V3 (1,0,1): Right & Front
     },
     };
+    const Vector3 m_face_vertices[6][4]{
+        { {0,0,1}, {1,0,1}, {1,1,1}, {0,1,1} }, // Front (Z+)
+        { {1,0,0}, {0,0,0}, {0,1,0}, {1,1,0} }, // Back (Z-)
+        { {0,0,0}, {0,0,1}, {0,1,1}, {0,1,0} }, // Left (X-)
+        { {1,0,1}, {1,0,0}, {1,1,0}, {1,1,1} }, // Right (X+)
+        { {0,1,1}, {1,1,1}, {1,1,0}, {0,1,0} }, // Top (Y+)
+        { {0,0,0}, {1,0,0}, {1,0,1}, {0,0,1} }  // Bottom (Y-)
+    };
+    const unsigned short m_face_indices[6]
+    {
+        0, 1, 2,  // First triangle
+        0, 2, 3   // Second triangle
+    };
+    const float m_face_UVs[4][2]
+    {
+        {1.0f, 1.0f}, // Top-Right
+        {0.0f, 1.0f}, // Top-Left
+            {0.0f, 0.0f}, // Bottom-Left  u  v
+        {1.0f, 0.0f} // Bottom-Right
+    };
+    const unsigned char m_shades[6]{
+        200,
+        160,
+        200,
+        160,
+        255,
+        130
+    };
+    struct FrustumPlane {
+        float x, y, z, d;
+    };
+    struct Frustum {
+        FrustumPlane planes[6];
+    };
+    Frustum extract_frustum();
+    bool check_aabb_against_frustum(const Frustum& frustum, Vector3 min, Vector3 max);
 };

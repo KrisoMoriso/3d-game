@@ -6,6 +6,7 @@
 #include "Game.h"
 #include "raymath.h"
 #include "ResourceManager.h"
+#include "rlgl.h"
 
 bool Renderer::are_chunk_neighbours_ready(World::ChunkPos chunk_pos){
     for (int dz = -1; dz <= 1; ++dz) {
@@ -13,6 +14,9 @@ bool Renderer::are_chunk_neighbours_ready(World::ChunkPos chunk_pos){
             for (int dx = -1; dx <= 1; ++dx) {
                 World::ChunkPos target_pos = {chunk_pos.x + dx, chunk_pos.y + dy, chunk_pos.z + dz};
 
+                if (target_pos.y < 0 || target_pos.y >= World::WORLD_CHUNK_HEIGHT) {
+                    continue;
+                }
                 auto it = Game::Get().m_world.m_chunks.find(target_pos);
                 if (it != Game::Get().m_world.m_chunks.end() and !it->second->m_is_generating) {
                 } else {
@@ -229,10 +233,13 @@ bool Renderer::is_solid(const MeshJob& job, int x, int y, int z) {
 
     return job.neighbour_chunks[index]->m_blocks[lz + ly * 16 + lx * 256].m_material_type != World::BLOCK_MATERIALS::AIR;
 }
+
+
+
 unsigned char Renderer::compute_ao(const MeshJob& job, int x, int y, int z,
-    int dx1, int dy1, int dz1,   // side 1
-    int dx2, int dy2, int dz2,   // side 2
-    int dcx, int dcy, int dcz)   // corner diagonal
+                                   int dx1, int dy1, int dz1,   // side 1
+                                   int dx2, int dy2, int dz2,   // side 2
+                                   int dcx, int dcy, int dcz)   // corner diagonal
 {
     bool side1  = is_solid(job, x + dx1, y + dy1, z + dz1);
     bool side2  = is_solid(job, x + dx2, y + dy2, z + dz2);
@@ -252,14 +259,22 @@ void Renderer::render_chunks(Vector3 player_pos)
 {
     World::ChunkPos player_chunk = World::get_chunk_position(player_pos);
     int render_distance = Game::Get().RENDER_DISTANCE;
+
+    Frustum frustum = extract_frustum();
+
     for (auto& pair : m_chunk_meshes){
         World::ChunkPos chunk_pos = pair.first;
         if (pair.first.x >= player_chunk.x - render_distance and pair.first.x <= player_chunk.x + render_distance
                 and pair.first.z >= player_chunk.z - render_distance and pair.first.z <= player_chunk.z + render_distance){
 
-            DrawMesh(pair.second, ResourceManager::Get().WORLD_MATERIAL, MatrixTranslate(float(chunk_pos.x *16), float(chunk_pos.y *16), float(chunk_pos.z *16)));
-        }
 
+            Vector3 chunk_min = { float(chunk_pos.x * 16), float(chunk_pos.y * 16), float(chunk_pos.z * 16) };
+            Vector3 chunk_max = { float(chunk_pos.x * 16 + 16), float(chunk_pos.y * 16 + 16), float(chunk_pos.z * 16 + 16) };
+
+            if (check_aabb_against_frustum(frustum, chunk_min, chunk_max)){
+                DrawMesh(pair.second, ResourceManager::Get().WORLD_MATERIAL, MatrixTranslate(float(chunk_pos.x *16), float(chunk_pos.y *16), float(chunk_pos.z *16)));
+            }
+        }
     }
 }
 void Renderer::update_mesh(Vector3 player_pos){
@@ -334,8 +349,6 @@ void Renderer::update_mesh(Vector3 player_pos){
     bool needs_sorting = false;
 
 
-
-
     for (int x = chunk_pos.x - render_distance; x <= chunk_pos.x + render_distance; ++x) {
         for (int z = chunk_pos.z - render_distance; z <= chunk_pos.z + render_distance; ++z) {
             for (int y = 0; y < World::WORLD_CHUNK_HEIGHT; ++y) {
@@ -383,17 +396,6 @@ void Renderer::update_mesh(Vector3 player_pos){
     }
 
 
-    // if (chunk_pos != m_last_player_chunk){
-    //     for (const auto& pair : m_chunk_meshes){
-    //         if (!(pair.first.x >= chunk_pos.x - render_distance and pair.first.x <= chunk_pos.x + render_distance
-    //             and pair.first.z >= chunk_pos.z - render_distance and pair.first.z <= chunk_pos.z + render_distance
-    //             )){
-    //             m_chunks_to_unload.push_back(pair.first);
-    //         }
-    //
-    // }
-    //     m_last_player_chunk = chunk_pos;
-    // }
     int unloaded_this_frame = 0;
     int max_unloads = 2;
     while (!m_chunks_to_unload.empty() and unloaded_this_frame < max_unloads){
@@ -420,12 +422,6 @@ void Renderer::update_mesh(Vector3 player_pos){
 bool Renderer::send_chunk_to_thread(World::ChunkPos chunk_pos, bool is_priority){
     MeshJob mesh_job = pack_mesh_job(chunk_pos);
     if (!mesh_job.center_chunk) return false;
-    for (auto is : mesh_job.do_neighbour_exists){
-        if (!is){
-            mesh_job.center_chunk->m_is_meshing = false;
-            return false;
-        }
-    }
     if (!is_priority){
         Game::Get().m_thread_pool.enqueue([this, mesh_job](){
            this->update_mesh_chunk(mesh_job, m_result_queue);
@@ -468,4 +464,47 @@ void Renderer::update_block_meshes(World::ChunkPos chunk_pos, int local_x, int l
 
     if (local_z == 0)  queue_chunk({chunk_pos.x, chunk_pos.y, chunk_pos.z - 1});
     if (local_z == 15) queue_chunk({chunk_pos.x, chunk_pos.y, chunk_pos.z + 1});
+}
+
+Renderer::Frustum Renderer::extract_frustum() {
+    Frustum f;
+
+    Matrix vp = MatrixMultiply(rlGetMatrixModelview(), rlGetMatrixProjection());
+
+    f.planes[0] = {vp.m3 + vp.m0, vp.m7 + vp.m4, vp.m11 + vp.m8,  vp.m15 + vp.m12}; // Left
+    f.planes[1] = {vp.m3 - vp.m0, vp.m7 - vp.m4, vp.m11 - vp.m8,  vp.m15 - vp.m12}; // Right
+    f.planes[2] = {vp.m3 + vp.m1, vp.m7 + vp.m5, vp.m11 + vp.m9,  vp.m15 + vp.m13}; // Bottom
+    f.planes[3] = {vp.m3 - vp.m1, vp.m7 - vp.m5, vp.m11 - vp.m9,  vp.m15 - vp.m13}; // Top
+    f.planes[4] = {vp.m3 + vp.m2, vp.m7 + vp.m6, vp.m11 + vp.m10, vp.m15 + vp.m14}; // Near
+    f.planes[5] = {vp.m3 - vp.m2, vp.m7 - vp.m6, vp.m11 - vp.m10, vp.m15 - vp.m14}; // Far
+
+    // Normalize each plane for accurate distance calculations
+    for (int i = 0; i < 6; i++) {
+        float length = sqrt(f.planes[i].x * f.planes[i].x +
+                            f.planes[i].y * f.planes[i].y +
+                            f.planes[i].z * f.planes[i].z);
+        f.planes[i].x /= length;
+        f.planes[i].y /= length;
+        f.planes[i].z /= length;
+        f.planes[i].d /= length;
+    }
+
+    return f;
+}
+
+bool Renderer::check_aabb_against_frustum(const Frustum& frustum, Vector3 min, Vector3 max) {
+    for (int i = 0; i < 6; i++) {
+        Vector3 p = min;
+        if (frustum.planes[i].x >= 0) p.x = max.x;
+        if (frustum.planes[i].y >= 0) p.y = max.y;
+        if (frustum.planes[i].z >= 0) p.z = max.z;
+
+        if (frustum.planes[i].x * p.x +
+            frustum.planes[i].y * p.y +
+            frustum.planes[i].z * p.z +
+            frustum.planes[i].d < -0.1f) {
+            return false;
+        }
+    }
+    return true;
 }

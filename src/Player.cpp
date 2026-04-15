@@ -8,7 +8,7 @@
 
 Player::Player(){
     m_camera = { 0 };
-    m_camera.position = (Vector3){ 20.0f, World::WORLD_CHUNK_HEIGHT*16 - 10, 10.0f }; // Camera position
+    m_camera.position = (Vector3){ 20.5f, World::WORLD_CHUNK_HEIGHT*16 - 10, 10.5f }; // Camera position
     m_position = m_camera.position;
     m_camera.target = (Vector3){ 0.0f, 0.0f, 0.0f };      // Camera looking at point
     m_camera.target =
@@ -114,7 +114,7 @@ bool Player::check_collision_AABB(){
     }
     return false;
 }
-void Player::update_physics() {
+void Player::update_physics(bool enable_player_collision) {
     World& world = Game::Get().m_world;
     float dt = GetFrameTime();
 
@@ -138,12 +138,16 @@ void Player::update_physics() {
     if (IsKeyDown(KEY_LEFT_SHIFT)) movement.y -= m_speed_adjust * dt;
 
 
-    //X
     m_position.x += movement.x;
-    if (check_collision_AABB()) {
-        if (movement.x > 0) { //X+
+
+    //X
+    if (check_collision_AABB() and enable_player_collision){
+        if (movement.x > 0){
+            //X+
             m_position.x = get_voxel_coordinate(m_position.x + m_width / 2.0f) - (m_width / 2.0f) - 0.001f;
-        } else if (movement.x < 0) {//X-
+        }
+        else if (movement.x < 0){
+            //X-
             m_position.x = get_voxel_coordinate(m_position.x - m_width / 2.0f) + 1.0f + (m_width / 2.0f) + 0.001f;
         }
         m_velocity.x = 0;
@@ -151,10 +155,13 @@ void Player::update_physics() {
 
     //Y
     m_position.y += movement.y;
-    if (check_collision_AABB()) {
-        if (movement.y > 0) { // Y+
+    if (check_collision_AABB() and enable_player_collision){
+        if (movement.y > 0){
+            // Y+
             m_position.y = get_voxel_coordinate(m_position.y + m_height) - m_height - 0.001f;
-        } else if (movement.y < 0) { //Y-
+        }
+        else if (movement.y < 0){
+            //Y-
             m_position.y = get_voxel_coordinate(m_position.y) + 1.0f;
         }
         m_velocity.y = 0;
@@ -162,14 +169,18 @@ void Player::update_physics() {
 
     // Z
     m_position.z += movement.z;
-    if (check_collision_AABB()) {
-        if (movement.z > 0) { // Z+
+    if (check_collision_AABB() and enable_player_collision){
+        if (movement.z > 0){
+            // Z+
             m_position.z = get_voxel_coordinate(m_position.z + m_width / 2.0f) - (m_width / 2.0f) - 0.001f;
-        } else if (movement.z < 0) { // Z-
+        }
+        else if (movement.z < 0){
+            // Z-
             m_position.z = get_voxel_coordinate(m_position.z - m_width / 2.0f) + 1.0f + (m_width / 2.0f) + 0.001f;
         }
         m_velocity.z = 0;
     }
+
 
     Vector3 view_dir = Vector3Subtract(m_camera.target, m_camera.position);
 
