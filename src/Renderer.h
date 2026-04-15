@@ -50,8 +50,8 @@ public:
     struct MeshJob{
         World::ChunkPos chunk_pos;
         std::shared_ptr<Chunk> center_chunk;
-        std::shared_ptr<Chunk> neighbour_chunks[6];
-        bool do_neighbour_exists[6];
+        std::shared_ptr<Chunk> neighbour_chunks[27]; //13 neighbour is the center_chunk
+        bool do_neighbour_exists[27];
     };
 
     bool are_chunk_neighbours_ready(World::ChunkPos chunk_pos);
@@ -95,16 +95,21 @@ private:
           { {-1,0,-1},{0,1,-1},{-1,1,-1} },
             { {1,0,-1},{0,1,-1},{1,1,-1} } },
         // Face 2: X- (left, normal -X)
-        { { {-1,0,1},{-1,-1,0},{-1,-1,1} },
-            { {-1,0,-1},{-1,-1,0},{-1,-1,-1} },
-          { {-1,0,-1},{-1,1,0},{-1,1,-1} },
-            { {-1,0,1},{-1,1,0},{-1,1,1} } },
+        {
+                { {-1,0,-1}, {-1,-1,0}, {-1,-1,-1} },
+                { {-1,0,1}, {-1,-1,0}, {-1,-1,1} },
+                { {-1,0,1}, {-1,1,0}, {-1,1,1} },
+                { {-1,0,-1}, {-1,1,0}, {-1,1,-1} }
+        },
+
         // Face 3: X+ (right, normal +X)
-        { { {1,0,-1},{1,-1,0},{1,-1,-1} },
-            { {1,0,1},{1,-1,0},{1,-1,1} },
-          { {1,0,1},{1,1,0},{1,1,1} },
-            { {1,0,-1},{1,1,0},{1,1,-1} } },
-        // Face 4: Y+ (top, normal +Y) - FIXED Z-OFFSETS
+        {
+                { {1,0,1}, {1,-1,0}, {1,-1,1} },
+                { {1,0,-1}, {1,-1,0}, {1,-1,-1} },
+                { {1,0,-1}, {1,1,0}, {1,1,-1} },
+                { {1,0,1}, {1,1,0}, {1,1,1} }
+        },
+        // Face 4: Y+ (top, normal +Y)
     {
             { {-1,1,0},{0,1,1},{-1,1,1} },  // V0 (0,1,1): Left & Front
             { {1,1,0},{0,1,1},{1,1,1} },   // V1 (1,1,1): Right & Front
@@ -112,7 +117,7 @@ private:
             { {-1,1,0},{0,1,-1},{-1,1,-1} } // V3 (0,1,0): Left & Back
     },
 
-    // Face 5: Y- (bottom, normal -Y) - FIXED Z-OFFSETS
+    // Face 5: Y- (bottom, normal -Y)
     {
             { {1,-1,0},{0,-1,-1},{1,-1,-1} }, // V0 (1,0,0): Right & Back
             { {-1,-1,0},{0,-1,-1},{-1,-1,-1} },// V1 (0,0,0): Left & Back
