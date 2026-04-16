@@ -7,16 +7,50 @@
 World::World()
 {
 
-    m_chunks[{0, WORLD_CHUNK_HEIGHT - 1, 0}] = std::make_unique<Chunk>();
-    for (auto& block : m_chunks.find({0, WORLD_CHUNK_HEIGHT - 1, 0})->second->m_blocks){
-        block.m_material_type = 0;
+}
+
+World::ChunkPos World::get_chunk_position(Vector3 position){
+    ChunkPos chunk_pos;
+    chunk_pos.x = static_cast<int>(std::floor(position.x / 16.0f));
+    chunk_pos.y = static_cast<int>(std::floor(position.y / 16.0f));
+    chunk_pos.z = static_cast<int>(std::floor(position.z / 16.0f));
+    return chunk_pos;
+}
+
+unsigned short World::get_block_material(int x, int y, int z){
+    int chunk_x = x >> 4;
+    int chunk_y = y >> 4;
+    int chunk_z = z >> 4;
+
+    int block_x = x & 15;
+    int block_y = y & 15;
+    int block_z = z & 15;
+
+    auto chunk_it = m_chunks.find({chunk_x, chunk_y, chunk_z});
+
+    if (chunk_it != m_chunks.end()){
+        return chunk_it->second->getBlockMaterial(block_x, block_y, block_z);
     }
-    m_chunks.find({0, WORLD_CHUNK_HEIGHT - 1, 0})->second->m_blocks[2730].m_material_type = BLOCK_MATERIALS::GRASS_BLOCK;
-    m_chunks.find({0, WORLD_CHUNK_HEIGHT - 1, 0})->second->m_blocks[2731].m_material_type = BLOCK_MATERIALS::GRASS_BLOCK;
-    m_chunks.find({0, WORLD_CHUNK_HEIGHT - 1, 0})->second->m_blocks[2732].m_material_type = BLOCK_MATERIALS::DIRT;
-    m_chunks.find({0, WORLD_CHUNK_HEIGHT - 1, 0})->second->m_blocks[2733].m_material_type = BLOCK_MATERIALS::DIRT;
-    m_chunks.find({0, WORLD_CHUNK_HEIGHT - 1, 0})->second->m_blocks[2765].m_material_type = BLOCK_MATERIALS::OAK_PLANKS;
-    m_chunks.find({0, WORLD_CHUNK_HEIGHT - 1, 0})->second->m_blocks[2797].m_material_type = BLOCK_MATERIALS::OAK_LOG;
+    return 0;
+}
+
+void World::set_block_material(int x, int y, int z, unsigned short material){
+    int chunk_x = x >> 4;
+    int chunk_y = y >> 4;
+    int chunk_z = z >> 4;
+
+    int block_x = x & 15;
+    int block_y = y & 15;
+    int block_z = z & 15;
+
+    auto chunk_it = m_chunks.find({chunk_x, chunk_y, chunk_z});
+
+    if (chunk_it != m_chunks.end()){
+        {
+            std::unique_lock<std::shared_mutex> lock(chunk_it->second->m_block_mutex);
+            chunk_it->second->setBlock(block_x, block_y, block_z, material);
+        }
+    }
 
 }
 
@@ -112,12 +146,6 @@ void World::generate_chunk(GenerationJob generation_job,
     noise_macro.SetFractalType(FastNoiseLite::FractalType_FBm);
     noise_macro.SetFractalOctaves(3);
 
-    // FastNoiseLite noise_macro2;
-    // noise_macro2.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
-    // noise_macro2.SetSeed(Game::Get().WORLD_SEED + 10);
-    // noise_macro2.SetFrequency(0.008f);
-    // noise_macro2.SetFractalType(FastNoiseLite::FractalType_Ridged);
-    // noise_macro2.SetFractalOctaves(2);
 
     FastNoiseLite noise_micro;
     noise_micro.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
@@ -148,9 +176,6 @@ void World::generate_chunk(GenerationJob generation_job,
             float val_macro = noise_macro.GetNoise((float)world_x, (float)world_z);
             float val_micro = noise_micro.GetNoise((float)world_x, (float)world_z);
 
-            // int macro_sign = val_macro > 0 ? 1 : -1;
-            // float shaped_macro = val_macro * val_macro * macro_sign;
-            // float shaped_macro = val_macro;
             float shaped_macro = val_macro - std::abs(val_micro) * 0.3f;
             int base_height = 90;
             int surface_y = base_height + (int)(shaped_macro * 60.0f) + (int)(val_micro * 6.0f);
@@ -251,56 +276,3 @@ void World::perform_radar_job(RadarJob job, ThreadPool::SafeQueue<RadarResult>& 
 
     queue_radar_results.push(std::move(result));
 }
-
-
-
-
-
-
-
-
-World::ChunkPos World::get_chunk_position(Vector3 position){
-    ChunkPos chunk_pos;
-    chunk_pos.x = static_cast<int>(std::floor(position.x / 16.0f));
-    chunk_pos.y = static_cast<int>(std::floor(position.y / 16.0f));
-    chunk_pos.z = static_cast<int>(std::floor(position.z / 16.0f));
-    return chunk_pos;
-}
-
-unsigned short World::get_block_material(int x, int y, int z){
-    int chunk_x = x >> 4;
-    int chunk_y = y >> 4;
-    int chunk_z = z >> 4;
-
-    int block_x = x & 15;
-    int block_y = y & 15;
-    int block_z = z & 15;
-
-    auto chunk_it = m_chunks.find({chunk_x, chunk_y, chunk_z});
-
-    if (chunk_it != m_chunks.end()){
-        return chunk_it->second->getBlockMaterial(block_x, block_y, block_z);
-    }
-    return 0;
-}
-
-void World::set_block_material(int x, int y, int z, unsigned short material){
-    int chunk_x = x >> 4;
-    int chunk_y = y >> 4;
-    int chunk_z = z >> 4;
-
-    int block_x = x & 15;
-    int block_y = y & 15;
-    int block_z = z & 15;
-
-    auto chunk_it = m_chunks.find({chunk_x, chunk_y, chunk_z});
-
-    if (chunk_it != m_chunks.end()){
-        {
-            std::unique_lock<std::shared_mutex> lock(chunk_it->second->m_block_mutex);
-            chunk_it->second->setBlock(block_x, block_y, block_z, material);
-        }
-    }
-
-}
-

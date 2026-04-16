@@ -48,12 +48,13 @@ public:
         }
     };
     std::unordered_map<ChunkPos, std::shared_ptr<Chunk>, ChunkPosHash> m_chunks;
-    World();
     static constexpr int WORLD_CHUNK_HEIGHT = 10;
+    World();
     static ChunkPos get_chunk_position(Vector3 position);
     unsigned short get_block_material(int x, int y, int z);
     void set_block_material(int x, int y, int z, unsigned short material);
     void generate_world(Vector3 player_position);
+private:
     ChunkPos m_last_player_chunk;
     struct GenerationJob{
         ChunkPos chunk_pos;
@@ -74,7 +75,6 @@ public:
         std::vector<ChunkPos> chunks_to_remove;
     };
 
-private:
     ThreadPool::SafeQueue<GenerationResult> m_queue_generation_result;
     std::vector<ChunkPos> m_queue_to_generate;
     std::unordered_set<ChunkPos, ChunkPosHash> m_chunks_in_progress;

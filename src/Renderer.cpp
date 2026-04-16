@@ -299,7 +299,6 @@ void Renderer::add_face(int face_id, int x, int y, int z,
     int offset = indice_counter * 4;
 
     if (ao_results[0] + ao_results[2] > ao_results[1] + ao_results[3]) {
-        // Split along diagonal 0-2
         indices.push_back(offset + 0);
         indices.push_back(offset + 1);
         indices.push_back(offset + 2);
@@ -307,7 +306,6 @@ void Renderer::add_face(int face_id, int x, int y, int z,
         indices.push_back(offset + 3);
         indices.push_back(offset + 0);
     } else {
-        // Split along diagonal 1-3
         indices.push_back(offset + 1);
         indices.push_back(offset + 2);
         indices.push_back(offset + 3);
@@ -333,14 +331,10 @@ bool Renderer::is_solid(const MeshJob& job, int x, int y, int z) {
     int dy = (y < 0) ? -1 : (y > 15 ? 1 : 0);
     int dz = (z < 0) ? -1 : (z > 15 ? 1 : 0);
 
-    // 2. Get the neighbor index
     int index = (dx + 1) + (dy + 1) * 3 + (dz + 1) * 9;
 
-    // 3. Safety check
     if (!job.do_neighbour_exists[index]) return false;
 
-    // 4. Wrap local coordinates to 0-15
-    // (val % 16 + 16) % 16 handles negative coordinates correctly
     int lx = ((x % 16) + 16) % 16;
     int ly = ((y % 16) + 16) % 16;
     int lz = ((z % 16) + 16) % 16;
@@ -365,7 +359,6 @@ unsigned char Renderer::compute_ao(const MeshJob& job, int x, int y, int z,
     else
         ao = 3 - (int(side1) + int(side2) + int(corner));
 
-    // ao is 0..3; map to shade (e.g. 140, 175, 210, 255)
     constexpr unsigned char ao_table[4] = { 140, 175, 210, 255 };
     return ao_table[ao];
 }
