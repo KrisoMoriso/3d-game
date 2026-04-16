@@ -46,6 +46,7 @@ public:
     World::ChunkPos m_last_player_chunk;
     std::vector<World::ChunkPos> m_chunks_to_unload;
 private:
+    void upload_mesh_to_gpu(const MeshResult& mesh);
     unsigned char compute_ao(const MeshJob& job, int x, int y, int z, int dx1, int dy1, int dz1, int dx2, int dy2,
                              int dz2,
                              int dcx, int dcy, int dcz);

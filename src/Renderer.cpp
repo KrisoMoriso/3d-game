@@ -50,7 +50,7 @@ Renderer::MeshJob Renderer::pack_mesh_job(World::ChunkPos chunk_pos){
         }
     }
     // Set center shortcut for convenience
-    mesh_job.center_chunk = mesh_job.neighbour_chunks[13];
+    mesh_job.center_chunk = mesh_job.neighbour_chunks[13]; //13 is the center chunk
     return mesh_job;
 
 
@@ -277,71 +277,46 @@ void Renderer::render_chunks(Vector3 player_pos)
         }
     }
 }
+
+
+void Renderer::upload_mesh_to_gpu(const MeshResult& mesh){
+    std::vector<float> vertices = mesh.vertices;
+    std::vector<float> texcoords = mesh.texcoords;
+    std::vector<unsigned short> indices = mesh.indices;
+    std::vector<unsigned char> shades = mesh.shades;
+    World::ChunkPos chunk_pos = mesh.chunk_pos;
+    Mesh cubeMesh = {0};
+    cubeMesh.vertexCount = vertices.size()/3;
+    cubeMesh.triangleCount = indices.size()/3;
+    cubeMesh.vertices = (float *)MemAlloc(cubeMesh.vertexCount * 3 * sizeof(float));
+    cubeMesh.texcoords = (float *)MemAlloc(cubeMesh.vertexCount * 2 * sizeof(float));
+    cubeMesh.indices = (unsigned short *)MemAlloc(cubeMesh.triangleCount * 3 * sizeof(unsigned short));
+    cubeMesh.colors = (unsigned char *)MemAlloc(cubeMesh.vertexCount * 4 * sizeof(unsigned char));
+
+    memcpy(cubeMesh.vertices, vertices.data(), vertices.size()*sizeof(float));
+    memcpy(cubeMesh.texcoords, texcoords.data(), texcoords.size() * sizeof(float));
+    memcpy(cubeMesh.indices, indices.data(), indices.size()*sizeof(unsigned short));
+    memcpy(cubeMesh.colors, shades.data(), shades.size()* sizeof(unsigned char) );
+    UploadMesh(&cubeMesh, true);
+
+    if (m_chunk_meshes.contains(chunk_pos)){
+        UnloadMesh(m_chunk_meshes[chunk_pos]);
+        m_chunk_meshes.erase(chunk_pos);
+    }
+
+    m_chunk_meshes[chunk_pos] = cubeMesh;
+    auto it = Game::Get().m_world.m_chunks.find(chunk_pos);
+
+    if (it != Game::Get().m_world.m_chunks.end()) it->second->m_is_meshing = false;
+}
+
 void Renderer::update_mesh(Vector3 player_pos){
     MeshResult finished_mesh;
     while (m_result_queue_priority.try_pop(finished_mesh)){
-        std::vector<float> vertices = finished_mesh.vertices;
-        std::vector<float> texcoords = finished_mesh.texcoords;
-        std::vector<unsigned short> indices = finished_mesh.indices;
-        std::vector<unsigned char> shades = finished_mesh.shades;
-        World::ChunkPos chunk_pos = finished_mesh.chunk_pos;
-        Mesh cubeMesh = {0};
-        cubeMesh.vertexCount = vertices.size()/3;
-        cubeMesh.triangleCount = indices.size()/3;
-        cubeMesh.vertices = (float *)MemAlloc(cubeMesh.vertexCount * 3 * sizeof(float));
-        cubeMesh.texcoords = (float *)MemAlloc(cubeMesh.vertexCount * 2 * sizeof(float));
-        cubeMesh.indices = (unsigned short *)MemAlloc(cubeMesh.triangleCount * 3 * sizeof(unsigned short));
-        cubeMesh.colors = (unsigned char *)MemAlloc(cubeMesh.vertexCount * 4 * sizeof(unsigned char));
-
-
-        memcpy(cubeMesh.vertices, vertices.data(), vertices.size()*sizeof(float));
-        memcpy(cubeMesh.texcoords, texcoords.data(), texcoords.size() * sizeof(float));
-        memcpy(cubeMesh.indices, indices.data(), indices.size()*sizeof(unsigned short));
-        memcpy(cubeMesh.colors, shades.data(), shades.size()* sizeof(unsigned char) );
-        UploadMesh(&cubeMesh, true);
-
-        if (m_chunk_meshes.contains(chunk_pos)){
-            UnloadMesh(m_chunk_meshes[chunk_pos]);
-            m_chunk_meshes.erase(chunk_pos);
-        }
-
-        m_chunk_meshes[chunk_pos] = cubeMesh;
-        Game::Get().m_world.m_chunks[chunk_pos]->m_is_meshing = false;
-
+        upload_mesh_to_gpu(finished_mesh);
     }
     while (m_result_queue.try_pop(finished_mesh)){
-        std::vector<float> vertices = finished_mesh.vertices;
-        std::vector<float> texcoords = finished_mesh.texcoords;
-        std::vector<unsigned short> indices = finished_mesh.indices;
-        std::vector<unsigned char> shades = finished_mesh.shades;
-        World::ChunkPos chunk_pos = finished_mesh.chunk_pos;
-        Mesh cubeMesh = {0};
-        cubeMesh.vertexCount = vertices.size()/3;
-        cubeMesh.triangleCount = indices.size()/3;
-        cubeMesh.vertices = (float *)MemAlloc(cubeMesh.vertexCount * 3 * sizeof(float));
-        cubeMesh.texcoords = (float *)MemAlloc(cubeMesh.vertexCount * 2 * sizeof(float));
-        cubeMesh.indices = (unsigned short *)MemAlloc(cubeMesh.triangleCount * 3 * sizeof(unsigned short));
-        cubeMesh.colors = (unsigned char *)MemAlloc(cubeMesh.vertexCount * 4 * sizeof(unsigned char));
-
-
-        memcpy(cubeMesh.vertices, vertices.data(), vertices.size()*sizeof(float));
-        memcpy(cubeMesh.texcoords, texcoords.data(), texcoords.size() * sizeof(float));
-        memcpy(cubeMesh.indices, indices.data(), indices.size()*sizeof(unsigned short));
-        memcpy(cubeMesh.colors, shades.data(), shades.size()* sizeof(unsigned char) );
-        UploadMesh(&cubeMesh, true);
-
-        if (m_chunk_meshes.contains(chunk_pos)){
-            UnloadMesh(m_chunk_meshes[chunk_pos]);
-            m_chunk_meshes.erase(chunk_pos);
-        }
-
-        m_chunk_meshes[chunk_pos] = cubeMesh;
-
-        auto it = Game::Get().m_world.m_chunks.find(chunk_pos);
-        if (it != Game::Get().m_world.m_chunks.end()) {
-            it->second->m_is_meshing = false;
-        }
-
+        upload_mesh_to_gpu(finished_mesh);
     }
 
     World::ChunkPos chunk_pos = World::get_chunk_position(player_pos);
