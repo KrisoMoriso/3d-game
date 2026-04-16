@@ -121,6 +121,39 @@ void Renderer::update_mesh_chunk(MeshJob mesh_job, ThreadPool::SafeQueue<MeshRes
     result_queue.push(std::move(mesh_result));
 }
 
+
+Vector2 Renderer::get_atlas_coords(unsigned short material_type, int face_id){
+    float atlas_pos_x = 0.0f;
+    float atlas_pos_y = 0.0f;
+    if (material_type == World::BLOCK_MATERIALS::DIRT){
+        //default
+    } else if (material_type == World::BLOCK_MATERIALS::GRASS_BLOCK){
+        if (face_id <= 3){
+            atlas_pos_x = 1.0f;
+        } else if (face_id == 4){
+            atlas_pos_x = 2.0f;
+        } else if (face_id == 5){
+            //default
+        }
+    } else if (material_type == World::BLOCK_MATERIALS::STONE){
+        atlas_pos_y = 1.0f;
+    } else if (material_type == World::BLOCK_MATERIALS::OAK_PLANKS){
+        atlas_pos_y = 2.0f;
+    } else if (material_type == World::BLOCK_MATERIALS::OAK_LOG){
+        if (face_id <= 3){
+            atlas_pos_x = 1.0f;
+            atlas_pos_y = 2.0f;
+        } else{
+            atlas_pos_x = 2.0f;
+            atlas_pos_y = 2.0f;
+        }
+    } else if (material_type == World::BLOCK_MATERIALS::SAND){
+        atlas_pos_y = 3.0f;
+    }
+    return Vector2{atlas_pos_x, atlas_pos_y};
+}
+
+
 void Renderer::add_face(int face_id, int x, int y, int z,
                         unsigned short block_material,
                         std::vector<float>& vertices,
@@ -176,40 +209,13 @@ void Renderer::add_face(int face_id, int x, int y, int z,
     }
 
     indice_counter++;
-    float atlas_pos_x = 0.0f;
-    float atlas_pos_y = 0.0f;
-    if (block_material == World::BLOCK_MATERIALS::DIRT){
-        //default
-    } else if (block_material == World::BLOCK_MATERIALS::GRASS_BLOCK){
-        if (face_id <= 3){
-            atlas_pos_x = 1.0f;
-        } else if (face_id == 4){
-            atlas_pos_x = 2.0f;
-        } else if (face_id == 5){
-            //default
-        }
 
-    } else if (block_material == World::BLOCK_MATERIALS::STONE){
-        atlas_pos_y = 1.0f;
-    } else if (block_material == World::BLOCK_MATERIALS::OAK_PLANKS){
-        atlas_pos_y = 2.0f;
-    } else if (block_material == World::BLOCK_MATERIALS::OAK_LOG){
-        if (face_id <= 3){
-            atlas_pos_x = 1.0f;
-            atlas_pos_y = 2.0f;
-        } else{
-            atlas_pos_x = 2.0f;
-            atlas_pos_y = 2.0f;
-        }
-    } else if (block_material == World::BLOCK_MATERIALS::SAND){
-        atlas_pos_y = 3.0f;
-    }
-
+    Vector2 atlas_coords = get_atlas_coords(block_material, face_id);
 
 
     for (auto uv : m_face_UVs){
-        texcoords.push_back((uv[0] + atlas_pos_x) * 0.0625f);
-        texcoords.push_back((uv[1] + atlas_pos_y) * 0.0625f);
+        texcoords.push_back((uv[0] + atlas_coords.x) * 0.0625f);
+        texcoords.push_back((uv[1] + atlas_coords.y) * 0.0625f);
     }
 
 
