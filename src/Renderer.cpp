@@ -8,6 +8,114 @@
 #include "ResourceManager.h"
 #include "rlgl.h"
 
+void Renderer::update_meshes(Vector3 player_pos){
+    MeshResult finished_mesh;
+    while (m_result_queue_priority.try_pop(finished_mesh)){
+        upload_mesh_to_gpu(finished_mesh);
+    }
+    while (m_result_queue.try_pop(finished_mesh)){
+        upload_mesh_to_gpu(finished_mesh);
+    }
+
+    World::ChunkPos chunk_pos = World::get_chunk_position(player_pos);
+    int render_distance = Game::Get().RENDER_DISTANCE;
+    bool needs_sorting = false;
+
+
+    for (int x = chunk_pos.x - render_distance; x <= chunk_pos.x + render_distance; ++x) {
+        for (int z = chunk_pos.z - render_distance; z <= chunk_pos.z + render_distance; ++z) {
+            for (int y = 0; y < World::WORLD_CHUNK_HEIGHT; ++y) {
+
+                World::ChunkPos pos = {x, y, z};
+                auto it = Game::Get().m_world.m_chunks.find(pos);
+
+                if (it != Game::Get().m_world.m_chunks.end()) {
+                    auto& chunk = it->second;
+                    if (!m_chunk_meshes.contains(pos) and !chunk->m_is_meshing and !chunk->m_is_generating and are_chunk_neighbours_ready(pos)) {
+                        m_queue_to_mesh.push_back(pos);
+                        chunk->m_is_meshing = true;
+                        needs_sorting = true;
+                    }
+                }
+            }
+        }
+    }
+
+    if (needs_sorting) {
+        std::sort(m_queue_to_mesh.begin(), m_queue_to_mesh.end(),
+            [chunk_pos](const World::ChunkPos& a, const World::ChunkPos& b) {
+
+                int distA = (a.x - chunk_pos.x)*(a.x - chunk_pos.x) + (a.z - chunk_pos.z)*(a.z - chunk_pos.z);
+                int distB = (b.x - chunk_pos.x)*(b.x - chunk_pos.x) + (b.z - chunk_pos.z)*(b.z - chunk_pos.z);
+
+
+                return distA > distB;
+        });
+    }
+
+    int max_sends = 3;
+    int sent_this_frame = 0;
+    while (!m_queue_to_mesh_priority.empty()){
+        World::ChunkPos pos_queue = m_queue_to_mesh_priority.front();
+        m_queue_to_mesh_priority.pop();
+        send_chunk_to_thread(pos_queue, true);
+        sent_this_frame++;
+    }
+    while (!m_queue_to_mesh.empty() and sent_this_frame < max_sends){
+        World::ChunkPos pos_queue = m_queue_to_mesh.back();
+        m_queue_to_mesh.pop_back();
+        send_chunk_to_thread(pos_queue, false);
+        sent_this_frame++;
+    }
+
+
+    int unloaded_this_frame = 0;
+    int max_unloads = 2;
+    while (!m_chunks_to_unload.empty() and unloaded_this_frame < max_unloads){
+        World::ChunkPos to_erase = m_chunks_to_unload.back();
+        m_chunks_to_unload.pop_back();
+
+        if (to_erase.x >= chunk_pos.x - render_distance && to_erase.x <= chunk_pos.x + render_distance &&
+        to_erase.z >= chunk_pos.z - render_distance && to_erase.z <= chunk_pos.z + render_distance) {
+            continue;
+        }
+
+        auto it = m_chunk_meshes.find(to_erase);
+        if (it != m_chunk_meshes.end()){
+            UnloadMesh(it->second);
+            m_chunk_meshes.erase(it);
+            unloaded_this_frame++;
+
+        }
+    }
+}
+
+void Renderer::render_chunks(Vector3 player_pos)
+{
+    World::ChunkPos player_chunk = World::get_chunk_position(player_pos);
+    int render_distance = Game::Get().RENDER_DISTANCE;
+
+    Frustum frustum = extract_frustum();
+
+    for (auto& pair : m_chunk_meshes){
+        World::ChunkPos chunk_pos = pair.first;
+        if (pair.first.x >= player_chunk.x - render_distance and pair.first.x <= player_chunk.x + render_distance
+                and pair.first.z >= player_chunk.z - render_distance and pair.first.z <= player_chunk.z + render_distance){
+
+
+            Vector3 chunk_min = { float(chunk_pos.x * 16), float(chunk_pos.y * 16), float(chunk_pos.z * 16) };
+            Vector3 chunk_max = { float(chunk_pos.x * 16 + 16), float(chunk_pos.y * 16 + 16), float(chunk_pos.z * 16 + 16) };
+
+            if (check_aabb_against_frustum(frustum, chunk_min, chunk_max)){
+                DrawMesh(pair.second, ResourceManager::Get().WORLD_MATERIAL, MatrixTranslate(float(chunk_pos.x *16), float(chunk_pos.y *16), float(chunk_pos.z *16)));
+            }
+                }
+    }
+}
+
+
+
+
 bool Renderer::are_chunk_neighbours_ready(World::ChunkPos chunk_pos){
     for (int dz = -1; dz <= 1; ++dz) {
         for (int dy = -1; dy <= 1; ++dy) {
@@ -261,48 +369,22 @@ unsigned char Renderer::compute_ao(const MeshJob& job, int x, int y, int z,
     constexpr unsigned char ao_table[4] = { 140, 175, 210, 255 };
     return ao_table[ao];
 }
-void Renderer::render_chunks(Vector3 player_pos)
-{
-    World::ChunkPos player_chunk = World::get_chunk_position(player_pos);
-    int render_distance = Game::Get().RENDER_DISTANCE;
-
-    Frustum frustum = extract_frustum();
-
-    for (auto& pair : m_chunk_meshes){
-        World::ChunkPos chunk_pos = pair.first;
-        if (pair.first.x >= player_chunk.x - render_distance and pair.first.x <= player_chunk.x + render_distance
-                and pair.first.z >= player_chunk.z - render_distance and pair.first.z <= player_chunk.z + render_distance){
-
-
-            Vector3 chunk_min = { float(chunk_pos.x * 16), float(chunk_pos.y * 16), float(chunk_pos.z * 16) };
-            Vector3 chunk_max = { float(chunk_pos.x * 16 + 16), float(chunk_pos.y * 16 + 16), float(chunk_pos.z * 16 + 16) };
-
-            if (check_aabb_against_frustum(frustum, chunk_min, chunk_max)){
-                DrawMesh(pair.second, ResourceManager::Get().WORLD_MATERIAL, MatrixTranslate(float(chunk_pos.x *16), float(chunk_pos.y *16), float(chunk_pos.z *16)));
-            }
-        }
-    }
-}
 
 
 void Renderer::upload_mesh_to_gpu(const MeshResult& mesh){
-    std::vector<float> vertices = mesh.vertices;
-    std::vector<float> texcoords = mesh.texcoords;
-    std::vector<unsigned short> indices = mesh.indices;
-    std::vector<unsigned char> shades = mesh.shades;
     World::ChunkPos chunk_pos = mesh.chunk_pos;
     Mesh cubeMesh = {0};
-    cubeMesh.vertexCount = vertices.size()/3;
-    cubeMesh.triangleCount = indices.size()/3;
+    cubeMesh.vertexCount = mesh.vertices.size()/3;
+    cubeMesh.triangleCount = mesh.indices.size()/3;
     cubeMesh.vertices = (float *)MemAlloc(cubeMesh.vertexCount * 3 * sizeof(float));
     cubeMesh.texcoords = (float *)MemAlloc(cubeMesh.vertexCount * 2 * sizeof(float));
     cubeMesh.indices = (unsigned short *)MemAlloc(cubeMesh.triangleCount * 3 * sizeof(unsigned short));
     cubeMesh.colors = (unsigned char *)MemAlloc(cubeMesh.vertexCount * 4 * sizeof(unsigned char));
 
-    memcpy(cubeMesh.vertices, vertices.data(), vertices.size()*sizeof(float));
-    memcpy(cubeMesh.texcoords, texcoords.data(), texcoords.size() * sizeof(float));
-    memcpy(cubeMesh.indices, indices.data(), indices.size()*sizeof(unsigned short));
-    memcpy(cubeMesh.colors, shades.data(), shades.size()* sizeof(unsigned char) );
+    memcpy(cubeMesh.vertices, mesh.vertices.data(), mesh.vertices.size()*sizeof(float));
+    memcpy(cubeMesh.texcoords, mesh.texcoords.data(), mesh.texcoords.size() * sizeof(float));
+    memcpy(cubeMesh.indices, mesh.indices.data(), mesh.indices.size()*sizeof(unsigned short));
+    memcpy(cubeMesh.colors, mesh.shades.data(), mesh.shades.size()* sizeof(unsigned char) );
     UploadMesh(&cubeMesh, true);
 
     if (m_chunk_meshes.contains(chunk_pos)){
@@ -316,89 +398,7 @@ void Renderer::upload_mesh_to_gpu(const MeshResult& mesh){
     if (it != Game::Get().m_world.m_chunks.end()) it->second->m_is_meshing = false;
 }
 
-void Renderer::update_mesh(Vector3 player_pos){
-    MeshResult finished_mesh;
-    while (m_result_queue_priority.try_pop(finished_mesh)){
-        upload_mesh_to_gpu(finished_mesh);
-    }
-    while (m_result_queue.try_pop(finished_mesh)){
-        upload_mesh_to_gpu(finished_mesh);
-    }
 
-    World::ChunkPos chunk_pos = World::get_chunk_position(player_pos);
-    int render_distance = Game::Get().RENDER_DISTANCE;
-    bool needs_sorting = false;
-
-
-    for (int x = chunk_pos.x - render_distance; x <= chunk_pos.x + render_distance; ++x) {
-        for (int z = chunk_pos.z - render_distance; z <= chunk_pos.z + render_distance; ++z) {
-            for (int y = 0; y < World::WORLD_CHUNK_HEIGHT; ++y) {
-
-                World::ChunkPos pos = {x, y, z};
-                auto it = Game::Get().m_world.m_chunks.find(pos);
-
-                if (it != Game::Get().m_world.m_chunks.end()) {
-                    auto& chunk = it->second;
-                    if (!m_chunk_meshes.contains(pos) and !chunk->m_is_meshing and !chunk->m_is_generating and are_chunk_neighbours_ready(pos)) {
-                        m_queue_to_mesh.push_back(pos);
-                        chunk->m_is_meshing = true;
-                        needs_sorting = true;
-                    }
-                }
-            }
-        }
-    }
-
-    if (needs_sorting) {
-        std::sort(m_queue_to_mesh.begin(), m_queue_to_mesh.end(),
-            [chunk_pos](const World::ChunkPos& a, const World::ChunkPos& b) {
-
-                int distA = (a.x - chunk_pos.x)*(a.x - chunk_pos.x) + (a.z - chunk_pos.z)*(a.z - chunk_pos.z);
-                int distB = (b.x - chunk_pos.x)*(b.x - chunk_pos.x) + (b.z - chunk_pos.z)*(b.z - chunk_pos.z);
-
-
-                return distA > distB;
-        });
-    }
-
-    int max_sends = 3;
-    int sent_this_frame = 0;
-    while (!m_queue_to_mesh_priority.empty()){
-        World::ChunkPos pos_queue = m_queue_to_mesh_priority.front();
-        m_queue_to_mesh_priority.pop();
-        send_chunk_to_thread(pos_queue, true);
-        sent_this_frame++;
-    }
-    while (!m_queue_to_mesh.empty() and sent_this_frame < max_sends){
-        World::ChunkPos pos_queue = m_queue_to_mesh.back();
-        m_queue_to_mesh.pop_back();
-        send_chunk_to_thread(pos_queue, false);
-        sent_this_frame++;
-    }
-
-
-    int unloaded_this_frame = 0;
-    int max_unloads = 2;
-    while (!m_chunks_to_unload.empty() and unloaded_this_frame < max_unloads){
-        World::ChunkPos to_erase = m_chunks_to_unload.back();
-        m_chunks_to_unload.pop_back();
-
-        if (to_erase.x >= chunk_pos.x - render_distance && to_erase.x <= chunk_pos.x + render_distance &&
-        to_erase.z >= chunk_pos.z - render_distance && to_erase.z <= chunk_pos.z + render_distance) {
-            continue; // Chunk is valid again. Abort deletion.
-        }
-
-        auto it = m_chunk_meshes.find(to_erase);
-        if (it != m_chunk_meshes.end()){
-            UnloadMesh(it->second);
-            m_chunk_meshes.erase(it);
-            unloaded_this_frame++;
-
-        }
-    }
-
-
-}
 
 bool Renderer::send_chunk_to_thread(World::ChunkPos chunk_pos, bool is_priority){
     MeshJob mesh_job = pack_mesh_job(chunk_pos);
@@ -419,24 +419,23 @@ bool Renderer::send_chunk_to_thread(World::ChunkPos chunk_pos, bool is_priority)
 
 
 
-// Pass in the local coordinates (0-15) of the broken/placed block
 void Renderer::update_block_meshes(World::ChunkPos chunk_pos, int local_x, int local_y, int local_z) {
 
-    // Helper lambda to safely queue a chunk
-    auto queue_chunk = [](World::ChunkPos pos) {
+
+    auto queue_chunk = [this](World::ChunkPos pos) {
         if (Game::Get().m_world.m_chunks.count(pos) > 0) {
             auto& chunk = Game::Get().m_world.m_chunks[pos];
             if (chunk && !chunk->m_is_meshing) {
-                Game::Get().m_renderer.m_queue_to_mesh_priority.emplace(pos);
+                m_queue_to_mesh_priority.emplace(pos);
                 chunk->m_is_meshing = true;
             }
         }
     };
 
-    // 1. ALWAYS remesh the chunk the block is inside of
+
     queue_chunk(chunk_pos);
 
-    // 2. ONLY remesh neighbors if the block is on the edge (0 or 15)
+
     if (local_x == 0)  queue_chunk({chunk_pos.x - 1, chunk_pos.y, chunk_pos.z});
     if (local_x == 15) queue_chunk({chunk_pos.x + 1, chunk_pos.y, chunk_pos.z});
 

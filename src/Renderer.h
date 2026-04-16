@@ -7,8 +7,17 @@
 #include "World.h"
 class Renderer {
 public:
-
+    void update_meshes(Vector3 player_pos);
+    void render_chunks(Vector3 player_pos);
     Renderer(){}
+    // for World.cpp so that chunks are erased and unloaded at the same time
+    void add_chunk_to_unload(World::ChunkPos pos){
+        m_chunks_to_unload.push_back(pos);
+    }
+    // remeshes needed chunks after world interaction
+    void update_block_meshes(World::ChunkPos chunk_pos, int local_x, int local_y, int local_z);
+
+private:
     Model m_cube_model;
     std::unordered_map<World::ChunkPos, Mesh, World::ChunkPosHash> m_chunk_meshes;
     struct MeshResult{
@@ -28,7 +37,6 @@ public:
     bool are_chunk_neighbours_ready(World::ChunkPos chunk_pos);
     MeshJob pack_mesh_job(World::ChunkPos chunk_pos);
     void update_mesh_chunk(MeshJob mesh_job, ThreadPool::SafeQueue<MeshResult>& result_queue);
-    void update_mesh(Vector3 player_pos);
     void add_face(int face_id, int x, int y, int z,
                   unsigned short block_material,
                   std::vector<float>& vertices,
@@ -36,16 +44,13 @@ public:
                   std::vector<unsigned short>& indices,
                   std::vector<unsigned char>& shades,
                   int& indice_counter, const MeshJob& job);
-    void render_chunks(Vector3 player_pos);
     bool send_chunk_to_thread(World::ChunkPos chunk_pos, bool is_priority);
-    void update_block_meshes(World::ChunkPos chunk_pos, int local_x, int local_y, int local_z);
     ThreadPool::SafeQueue<MeshResult> m_result_queue;
     ThreadPool::SafeQueue<MeshResult> m_result_queue_priority;
     std::vector<World::ChunkPos> m_queue_to_mesh;
     std::queue<World::ChunkPos> m_queue_to_mesh_priority;
     World::ChunkPos m_last_player_chunk;
     std::vector<World::ChunkPos> m_chunks_to_unload;
-private:
     static Vector2 get_atlas_coords(unsigned short material_type, int face_id);
     void upload_mesh_to_gpu(const MeshResult& mesh);
     unsigned char compute_ao(const MeshJob& job, int x, int y, int z, int dx1, int dy1, int dz1, int dx2, int dy2,
@@ -134,4 +139,5 @@ private:
     };
     Frustum extract_frustum();
     bool check_aabb_against_frustum(const Frustum& frustum, Vector3 min, Vector3 max);
+
 };

@@ -17,11 +17,11 @@ void Game::init() {
     SetTargetFPS(300);
     HideCursor();
     ResourceManager::Get().init();
-    m_renderer.update_mesh(m_player.m_camera.position);
+    m_renderer.update_meshes(m_player.m_camera.position);
 }
 
 void Game::main_loop() {
-    m_renderer.update_mesh(m_player.m_camera.position);
+    m_renderer.update_meshes(m_player.m_camera.position);
     m_world.generate_world(m_player.m_camera.position);
     m_player.update_physics(m_enable_player_collision);
     if (IsKeyPressed(KEY_C)) m_enable_player_collision = !m_enable_player_collision;

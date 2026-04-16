@@ -38,7 +38,7 @@ void World::generate_world(Vector3 player_position){
 
             if (m_chunks.contains(pos) && !m_chunks[pos]->m_is_generating) {
                 m_chunks.erase(pos);
-                Game::Get().m_renderer.m_chunks_to_unload.push_back(pos);
+                Game::Get().m_renderer.add_chunk_to_unload(pos);
                 deleted++;
             }
         }
