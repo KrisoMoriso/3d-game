@@ -66,11 +66,11 @@ void World::generate_world(Vector3 player_position){
                 m_queue_to_delete.push_back(pos);
             }
         }
-
+        render_dist = Game::Get().RENDER_DISTANCE;
         bool needs_sorting = false;
-        for (int x = chunk_pos.x - render_dist; x < chunk_pos.x + render_dist; ++x) {
+        for (int x = chunk_pos.x - render_dist; x <= chunk_pos.x + render_dist; ++x) {
             for (int y = 0; y < WORLD_CHUNK_HEIGHT; ++y) {
-                for (int z = chunk_pos.z - render_dist; z < chunk_pos.z + render_dist; ++z) {
+                for (int z = chunk_pos.z - render_dist; z <= chunk_pos.z + render_dist; ++z) {
 
                     if (!m_chunks.contains({x,y,z}) and !m_chunks_in_progress.contains({x, y, z})){
                         m_queue_to_generate.push_back({x, y, z});
@@ -80,12 +80,14 @@ void World::generate_world(Vector3 player_position){
                 }
             }
         }
-        if (needs_sorting){
+        if (needs_sorting or true){
             std::sort(m_queue_to_generate.begin(), m_queue_to_generate.end(),
                 [&chunk_pos](const ChunkPos& a, const ChunkPos& b) {
                     int distA = (a.x - chunk_pos.x)*(a.x - chunk_pos.x) +
+                                (a.z - chunk_pos.z)*(a.z - chunk_pos.z)+
                                 (a.z - chunk_pos.z)*(a.z - chunk_pos.z);
                     int distB = (b.x - chunk_pos.x)*(b.x - chunk_pos.x) +
+                                (b.z - chunk_pos.z)*(b.z - chunk_pos.z)+
                                 (b.z - chunk_pos.z)*(b.z - chunk_pos.z);
                     return distA > distB;
             });
@@ -102,16 +104,14 @@ void World::generate_world(Vector3 player_position){
         }
         m_queue_to_delete.clear();
 
-
-
-
         m_last_player_chunk = chunk_pos;
     }
 
 
+
     int constexpr max_generates = 4;
     int generates_this_frame = 0;
-    while (!m_queue_to_generate.empty() && generates_this_frame < max_generates) {
+    while (!m_queue_to_generate.empty() and generates_this_frame < max_generates) {
         ChunkPos pos_queue = m_queue_to_generate.back();
         m_queue_to_generate.pop_back();
 
@@ -128,8 +128,7 @@ void World::generate_world(Vector3 player_position){
     int constexpr max_finishes = 4;
     int finishes = 0;
 
-    while (m_queue_generation_result.try_pop(finished_result) && finishes < max_finishes) {
-
+    while (finishes < max_finishes and m_queue_generation_result.try_pop(finished_result) ) {
         m_chunks[finished_result.chunk_pos] = std::move(finished_result.chunk);
         m_chunks[finished_result.chunk_pos]->m_is_generating = false;
         m_chunks_in_progress.erase(finished_result.chunk_pos);

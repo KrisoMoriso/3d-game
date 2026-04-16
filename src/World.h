@@ -55,7 +55,7 @@ public:
     void set_block_material(int x, int y, int z, unsigned short material);
     void generate_world(Vector3 player_position);
 private:
-    ChunkPos m_last_player_chunk;
+    ChunkPos m_last_player_chunk = {99999,99999,99999};
     struct GenerationJob{
         ChunkPos chunk_pos;
     };
