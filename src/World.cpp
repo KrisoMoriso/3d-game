@@ -89,7 +89,7 @@ void World::generate_world(Vector3 player_position){
     }
 
 
-    if (chunk_pos != m_last_player_chunk or true) {
+    if (chunk_pos != m_last_player_chunk) {
 
 
         std::vector<ChunkPos> active_keys;
@@ -177,10 +177,10 @@ void World::generate_chunk(GenerationJob generation_job,
             float val_micro = noise_micro.GetNoise((float)world_x, (float)world_z);
 
             float shaped_macro = val_macro - std::abs(val_micro) * 0.3f;
-            int base_height = 90;
+            int base_height = 160;
             int surface_y = base_height + (int)(shaped_macro * 60.0f) + (int)(val_micro * 6.0f);
-            constexpr int SAND_LEVEL = 35;
-            constexpr int MOUNTAIN_LEVEL = 110;
+            constexpr int SAND_LEVEL = 110;
+            constexpr int MOUNTAIN_LEVEL = 190;
 
             for (int y = 0; y <= 15; ++y) {
                 int world_y = result.chunk_pos.y * 16 + y;
@@ -234,6 +234,12 @@ void World::generate_chunk(GenerationJob generation_job,
                         }
                     }
                 }
+
+                if (world_y == 1){
+                    current_material = BLOCK_MATERIALS::STONE;
+
+                }
+
                 result.chunk->setBlock(x, y, z, current_material);
             }
         }

@@ -53,7 +53,7 @@ void Renderer::update_meshes(Vector3 player_pos){
         });
     }
 
-    int max_sends = 3;
+    int max_sends = 6;
     int sent_this_frame = 0;
     while (!m_queue_to_mesh_priority.empty()){
         World::ChunkPos pos_queue = m_queue_to_mesh_priority.front();
@@ -70,15 +70,15 @@ void Renderer::update_meshes(Vector3 player_pos){
 
 
     int unloaded_this_frame = 0;
-    int max_unloads = 2;
+    int max_unloads = 4;
     while (!m_chunks_to_unload.empty() and unloaded_this_frame < max_unloads){
         World::ChunkPos to_erase = m_chunks_to_unload.back();
         m_chunks_to_unload.pop_back();
 
-        if (to_erase.x >= chunk_pos.x - render_distance && to_erase.x <= chunk_pos.x + render_distance &&
-        to_erase.z >= chunk_pos.z - render_distance && to_erase.z <= chunk_pos.z + render_distance) {
-            continue;
-        }
+        // if (to_erase.x >= chunk_pos.x - render_distance && to_erase.x <= chunk_pos.x + render_distance &&
+        // to_erase.z >= chunk_pos.z - render_distance && to_erase.z <= chunk_pos.z + render_distance) {
+        //     continue;
+        // }
 
         auto it = m_chunk_meshes.find(to_erase);
         if (it != m_chunk_meshes.end()){
@@ -106,7 +106,7 @@ void Renderer::render_chunks(Vector3 player_pos)
             Vector3 chunk_min = { float(chunk_pos.x * 16), float(chunk_pos.y * 16), float(chunk_pos.z * 16) };
             Vector3 chunk_max = { float(chunk_pos.x * 16 + 16), float(chunk_pos.y * 16 + 16), float(chunk_pos.z * 16 + 16) };
 
-            if (check_aabb_against_frustum(frustum, chunk_min, chunk_max)){
+            if (check_aabb_against_frustum(frustum, chunk_min, chunk_max) and pair.second.triangleCount > 0){
                 DrawMesh(pair.second, ResourceManager::Get().WORLD_MATERIAL, MatrixTranslate(float(chunk_pos.x *16), float(chunk_pos.y *16), float(chunk_pos.z *16)));
             }
                 }
@@ -126,8 +126,7 @@ bool Renderer::are_chunk_neighbours_ready(World::ChunkPos chunk_pos){
                     continue;
                 }
                 auto it = Game::Get().m_world.m_chunks.find(target_pos);
-                if (it != Game::Get().m_world.m_chunks.end() and !it->second->m_is_generating) {
-                } else {
+                if (it == Game::Get().m_world.m_chunks.end() or it->second->m_is_generating) {
                     return false;
                 }
             }
@@ -395,13 +394,19 @@ void Renderer::upload_mesh_to_gpu(const MeshResult& mesh){
 
 bool Renderer::send_chunk_to_thread(World::ChunkPos chunk_pos, bool is_priority){
     MeshJob mesh_job = pack_mesh_job(chunk_pos);
-    if (!mesh_job.center_chunk) return false;
+    if (!mesh_job.center_chunk){
+        auto it = Game::Get().m_world.m_chunks.find(chunk_pos);
+        if (it != Game::Get().m_world.m_chunks.end()) {
+            it->second->m_is_meshing = false;
+        }
+        return false;
+    }
+
+
     if (!is_priority){
         Game::Get().m_thread_pool.enqueue([this, mesh_job](){
            this->update_mesh_chunk(mesh_job, m_result_queue);
         });
-
-
     } else{
         Game::Get().m_thread_pool.enqueue([this, mesh_job](){
            this->update_mesh_chunk(mesh_job, m_result_queue_priority);

@@ -48,7 +48,7 @@ public:
         }
     };
     std::unordered_map<ChunkPos, std::shared_ptr<Chunk>, ChunkPosHash> m_chunks;
-    static constexpr int WORLD_CHUNK_HEIGHT = 10;
+    static constexpr int WORLD_CHUNK_HEIGHT = 16;
     World();
     static ChunkPos get_chunk_position(Vector3 position);
     unsigned short get_block_material(int x, int y, int z);

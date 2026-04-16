@@ -16,10 +16,9 @@ public:
     }
     // remeshes needed chunks after world interaction
     void update_block_meshes(World::ChunkPos chunk_pos, int local_x, int local_y, int local_z);
-
+    std::unordered_map<World::ChunkPos, Mesh, World::ChunkPosHash> m_chunk_meshes;
 private:
     Model m_cube_model;
-    std::unordered_map<World::ChunkPos, Mesh, World::ChunkPosHash> m_chunk_meshes;
     struct MeshResult{
         std::vector<float> vertices;
         std::vector<float> texcoords;
@@ -139,5 +138,4 @@ private:
     };
     Frustum extract_frustum();
     bool check_aabb_against_frustum(const Frustum& frustum, Vector3 min, Vector3 max);
-
 };
