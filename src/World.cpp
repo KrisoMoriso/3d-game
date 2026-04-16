@@ -59,11 +59,10 @@ void World::generate_world(Vector3 player_position){
 
     if (chunk_pos != m_last_player_chunk) {
 
-        int render_dist = Game::Get().RENDER_DISTANCE + 2;
+        int render_dist = Game::Get().RENDER_DISTANCE + 4;
         for (const auto& pair : m_chunks) {
             ChunkPos pos = pair.first;
             if (std::abs(pos.x - chunk_pos.x) > render_dist or std::abs(pos.z - chunk_pos.z) > render_dist){
-
                 m_queue_to_delete.push_back(pos);
             }
         }
