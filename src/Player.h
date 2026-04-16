@@ -13,12 +13,13 @@ public:
     float m_reach;
     float m_speed_adjust;
     Vector3 m_velocity;
-    Player();
-    void update_position();
     RayResult handle_interaction();
+    Player();
+    void update_physics(bool enable_player_collision);
+    void update_position();
+private:
     static int get_voxel_coordinate(float val){
         return static_cast<int>(std::floor(val));
     }
     bool check_collision_AABB();
-    void update_physics(bool enable_player_collision);
 };

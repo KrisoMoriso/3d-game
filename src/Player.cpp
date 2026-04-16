@@ -118,15 +118,15 @@ void Player::update_physics(bool enable_player_collision) {
     World& world = Game::Get().m_world;
     float dt = GetFrameTime();
 
-    // 1. Figure out which way we are looking (flattened to the XZ plane)
+
     Vector3 forward = Vector3Subtract(m_camera.target, m_camera.position);
     forward.y = 0.0f;
     forward = Vector3Normalize(forward);
 
-    // Perpendicular vector for strafing (Right-handed rule)
+
     Vector3 right = { -forward.z, 0.0f, forward.x };
 
-    // 2. Build the movement vector based on keys
+
     Vector3 movement = { 0 };
 
     if (IsKeyDown(KEY_W)) movement = Vector3Add(movement, Vector3Scale(forward, m_speed_adjust * dt));
@@ -184,9 +184,7 @@ void Player::update_physics(bool enable_player_collision) {
 
     Vector3 view_dir = Vector3Subtract(m_camera.target, m_camera.position);
 
-    // Move the camera to the physical position (plus eye height)
     m_camera.position = { m_position.x, m_position.y + 1.6f, m_position.z };
 
-    // Re-apply the view direction so the camera target shifts with us
     m_camera.target = Vector3Add(m_camera.position, view_dir);
 }
