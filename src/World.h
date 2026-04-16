@@ -64,20 +64,8 @@ private:
         std::unique_ptr<Chunk> chunk;
     };
     void generate_chunk(GenerationJob generation_job, ThreadPool::SafeQueue<GenerationResult>& queue_generation_result);
-    struct RadarJob {
-        ChunkPos center_chunk;
-        int render_distance;
-        std::vector<ChunkPos> active_chunk_keys;
-    };
-
-    struct RadarResult {
-        std::vector<ChunkPos> chunks_to_generate;
-        std::vector<ChunkPos> chunks_to_remove;
-    };
-
     ThreadPool::SafeQueue<GenerationResult> m_queue_generation_result;
     std::vector<ChunkPos> m_queue_to_generate;
+    std::vector<ChunkPos> m_queue_to_delete;
     std::unordered_set<ChunkPos, ChunkPosHash> m_chunks_in_progress;
-    ThreadPool::SafeQueue<RadarResult> m_radar_results;
-    void perform_radar_job(RadarJob job, ThreadPool::SafeQueue<RadarResult>& queue_radar_results);
 };

@@ -55,54 +55,56 @@ void World::set_block_material(int x, int y, int z, unsigned short material){
 }
 
 void World::generate_world(Vector3 player_position){
-    // TraceLog(LOG_WARNING, "chunks: %d | meshes: %d | in_progress: %d | gen_queue: %d",
-    // (int)m_chunks.size(),
-    // (int)Game::Get().m_renderer.m_chunk_meshes.size(),
-    // (int)m_chunks_in_progress.size(),
-    // (int)m_queue_to_generate.size());
      ChunkPos chunk_pos = get_chunk_position(player_position);
 
-    RadarResult radar_result;
-    if (m_radar_results.try_pop(radar_result)) {
+    if (chunk_pos != m_last_player_chunk) {
 
+        int render_dist = Game::Get().RENDER_DISTANCE + 2;
+        for (const auto& pair : m_chunks) {
+            ChunkPos pos = pair.first;
+            if (std::abs(pos.x - chunk_pos.x) > render_dist or std::abs(pos.z - chunk_pos.z) > render_dist){
 
+                m_queue_to_delete.push_back(pos);
+            }
+        }
+
+        bool needs_sorting = false;
+        for (int x = chunk_pos.x - render_dist; x < chunk_pos.x + render_dist; ++x) {
+            for (int y = 0; y < WORLD_CHUNK_HEIGHT; ++y) {
+                for (int z = chunk_pos.z - render_dist; z < chunk_pos.z + render_dist; ++z) {
+
+                    if (!m_chunks.contains({x,y,z}) and !m_chunks_in_progress.contains({x, y, z})){
+                        m_queue_to_generate.push_back({x, y, z});
+                        m_chunks_in_progress.insert({x,y,z});
+                        needs_sorting = true;
+                    }
+                }
+            }
+        }
+        if (needs_sorting){
+            std::sort(m_queue_to_generate.begin(), m_queue_to_generate.end(),
+                [&chunk_pos](const ChunkPos& a, const ChunkPos& b) {
+                    int distA = (a.x - chunk_pos.x)*(a.x - chunk_pos.x) +
+                                (a.z - chunk_pos.z)*(a.z - chunk_pos.z);
+                    int distB = (b.x - chunk_pos.x)*(b.x - chunk_pos.x) +
+                                (b.z - chunk_pos.z)*(b.z - chunk_pos.z);
+                    return distA > distB;
+            });
+        }
         int deleted = 0;
-        for (const auto& pos : radar_result.chunks_to_remove) {
+        for (const auto& pos : m_queue_to_delete) {
             // if (deleted >= 4) break;
 
-            if (m_chunks.contains(pos) && !m_chunks[pos]->m_is_generating) {
+            if (m_chunks.contains(pos) and !m_chunks[pos]->m_is_generating) {
                 m_chunks.erase(pos);
                 Game::Get().m_renderer.add_chunk_to_unload(pos);
                 deleted++;
             }
         }
-        for (const auto& pos : m_queue_to_generate) {
-            m_chunks_in_progress.erase(pos);
-        }
-        m_queue_to_generate.clear();
-        for (const auto& pos : radar_result.chunks_to_generate) {
-            if (!m_chunks.contains(pos) && !m_chunks_in_progress.contains(pos)) {
-                m_queue_to_generate.push_back(pos);
-                m_chunks_in_progress.insert(pos);
-            }
-        }
-    }
+        m_queue_to_delete.clear();
 
 
-    if (chunk_pos != m_last_player_chunk) {
 
-
-        std::vector<ChunkPos> active_keys;
-        active_keys.reserve(m_chunks.size());
-        for (const auto& pair : m_chunks) {
-            active_keys.push_back(pair.first);
-        }
-
-        RadarJob job = {chunk_pos, Game::Get().RENDER_DISTANCE, std::move(active_keys)};
-
-        Game::Get().m_thread_pool.enqueue([this, job]() {
-            this->perform_radar_job(job, m_radar_results);
-        });
 
         m_last_player_chunk = chunk_pos;
     }
@@ -246,39 +248,4 @@ void World::generate_chunk(GenerationJob generation_job,
     }
 
     queue_generation_result.push(std::move(result));
-}
-
-
-void World::perform_radar_job(RadarJob job, ThreadPool::SafeQueue<RadarResult>& queue_radar_results){
-    RadarResult result;
-    int render_dist = job.render_distance + 2;
-
-    for (const auto& pos : job.active_chunk_keys) {
-        if (std::abs(pos.x - job.center_chunk.x) > render_dist ||
-            std::abs(pos.z - job.center_chunk.z) > render_dist) {
-            result.chunks_to_remove.push_back(pos);
-            }
-    }
-
-
-    for (int x = job.center_chunk.x - render_dist; x < job.center_chunk.x + render_dist; ++x) {
-        for (int y = 0; y < WORLD_CHUNK_HEIGHT; ++y) {
-            for (int z = job.center_chunk.z - render_dist; z < job.center_chunk.z + render_dist; ++z) {
-                result.chunks_to_generate.push_back({x, y, z});
-            }
-        }
-    }
-
-
-    std::sort(result.chunks_to_generate.begin(), result.chunks_to_generate.end(),
-        [&job](const ChunkPos& a, const ChunkPos& b) {
-            int distA = (a.x - job.center_chunk.x)*(a.x - job.center_chunk.x) +
-                        (a.z - job.center_chunk.z)*(a.z - job.center_chunk.z);
-            int distB = (b.x - job.center_chunk.x)*(b.x - job.center_chunk.x) +
-                        (b.z - job.center_chunk.z)*(b.z - job.center_chunk.z);
-            return distA > distB;
-    });
-
-
-    queue_radar_results.push(std::move(result));
 }
