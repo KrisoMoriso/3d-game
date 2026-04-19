@@ -47,6 +47,21 @@ add_executable(3d_game src/main.cpp
         src/ray_dda.cpp
         src/ray_dda.h
         src/Player.cpp
-        src/Player.h)
+        src/Player.h
+        src/imgui/rlImGuiColors.h
+        src/imgui/imgui.cpp
+        src/imgui/imgui_internal.h
+        src/imgui/imgui_widgets.cpp
+        src/imgui/rlImGui.h
+        src/imgui/imgui_draw.cpp
+        src/imgui/imstb_rectpack.h
+        src/imgui/imgui_tables.cpp
+        src/imgui/imstb_truetype.h
+        src/imgui/imstb_textedit.h
+        src/imgui/imgui.h
+        src/imgui/imgui_demo.cpp
+        src/imgui/rlImGui.cpp
+        src/imgui/extras/FA6FreeSolidFontData.h
+        src/imgui/imgui_impl_raylib.h)
 
 target_link_libraries(${PROJECT_NAME} raylib)

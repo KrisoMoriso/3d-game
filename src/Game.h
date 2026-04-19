@@ -28,7 +28,15 @@ public:
     const int RENDER_DISTANCE = 14;
     const int WORLD_SEED = 12521;
     bool m_enable_player_collision = true;
+    bool m_is_debug_menu = false;
+    bool m_is_escape_menu = false;
+    bool m_window_should_close = false;
 private:
     Game() : m_thread_pool(6)
     {}
+    void run_imgui();
+    void setup_imgui();
+    void debug_menu();
+    void escape_menu();
+    void set_minecraft_style();
 };
