@@ -254,7 +254,7 @@ void Renderer::update_mesh_chunk(MeshJob mesh_job, ThreadPool::SafeQueue<MeshRes
 
 
 void Renderer::perform_culling(int x, int y, int z,
-                        unsigned short block_material,
+                        unsigned short current_block_material,
                         std::vector<float>& vertices,
                         std::vector<float>& texcoords,
                         std::vector<unsigned short>& indices,
@@ -262,32 +262,43 @@ void Renderer::perform_culling(int x, int y, int z,
                         int& indice_counter, const MeshJob& mesh_job){
     //check if block is at chunk edge
     //check X-
-    if (!is_solid(mesh_job, x - 1, y, z, block_material)){
-        add_face(2, x, y, z,block_material, vertices, texcoords, indices, shades, indice_counter, mesh_job);
+    unsigned short neighbour_material = get_block_material(mesh_job, x - 1, y, z);
+    if (should_render_face(current_block_material, neighbour_material)){
+        add_face(2, x, y, z,current_block_material, vertices, texcoords, indices, shades, indice_counter, mesh_job);
     }
     //X+
-    // X+
-    if (!is_solid(mesh_job, x + 1, y, z, block_material)) {
-        add_face(3, x, y, z, block_material, vertices, texcoords, indices, shades, indice_counter, mesh_job);
+    neighbour_material = get_block_material(mesh_job, x + 1, y, z);
+    if (should_render_face(current_block_material, neighbour_material)) {
+        add_face(3, x, y, z, current_block_material, vertices, texcoords, indices, shades, indice_counter, mesh_job);
     }
     // Z-
-    if (!is_solid(mesh_job, x, y, z - 1, block_material)) {
-        add_face(1, x, y, z, block_material, vertices, texcoords, indices, shades, indice_counter, mesh_job);
+    neighbour_material = get_block_material(mesh_job, x, y, z - 1);
+    if (should_render_face(current_block_material, neighbour_material)) {
+        add_face(1, x, y, z, current_block_material, vertices, texcoords, indices, shades, indice_counter, mesh_job);
     }
     // Z+
-    if (!is_solid(mesh_job, x, y, z + 1, block_material)) {
-        add_face(0, x, y, z, block_material, vertices, texcoords, indices, shades, indice_counter, mesh_job);
+    neighbour_material = get_block_material(mesh_job, x, y, z + 1);
+    if (should_render_face(current_block_material, neighbour_material)) {
+        add_face(0, x, y, z, current_block_material, vertices, texcoords, indices, shades, indice_counter, mesh_job);
     }
     // Y-
-    if (!is_solid(mesh_job, x, y - 1, z, block_material)) {
-        add_face(5, x, y, z, block_material, vertices, texcoords, indices, shades, indice_counter, mesh_job);
+    neighbour_material = get_block_material(mesh_job, x, y - 1, z);
+    if (should_render_face(current_block_material, neighbour_material)) {
+        add_face(5, x, y, z, current_block_material, vertices, texcoords, indices, shades, indice_counter, mesh_job);
     }
     // Y+
-    if (!is_solid(mesh_job, x, y + 1, z, block_material)) {
-        add_face(4, x, y, z, block_material, vertices, texcoords, indices, shades, indice_counter, mesh_job);
+    neighbour_material = get_block_material(mesh_job, x, y + 1, z);
+    if (should_render_face(current_block_material, neighbour_material)) {
+        add_face(4, x, y, z, current_block_material, vertices, texcoords, indices, shades, indice_counter, mesh_job);
     }
 }
+bool Renderer::should_render_face(unsigned short current_material, unsigned short neighbour_material){
+    if (World::BLOCK_MATERIALS::is_solid(neighbour_material)) return false;
 
+    if (World::BLOCK_MATERIALS::is_solid(current_material)) return true;
+
+    return current_material != neighbour_material;
+}
 
 Vector2 Renderer::get_atlas_coords(unsigned short material_type, int face_id){
     float atlas_pos_x = 0.0f;
@@ -331,11 +342,19 @@ void Renderer::add_face(int face_id, int x, int y, int z,
                         std::vector<unsigned char>& shades,
                         int& indice_counter, const MeshJob& job
 ){
+    bool is_top_block_of_water = block_material == World::BLOCK_MATERIALS::WATER and get_block_material(job, x, y + 1, z) != World::BLOCK_MATERIALS::WATER;
     vertices.reserve(12);
     for (int i = 0; i < 4; ++i){
-        vertices.push_back(m_face_vertices[face_id][i].x + x);
-        vertices.push_back(m_face_vertices[face_id][i].y + y);
-        vertices.push_back(m_face_vertices[face_id][i].z + z);
+        float vx = m_face_vertices[face_id][i].x;
+        float vy = m_face_vertices[face_id][i].y;
+        float vz = m_face_vertices[face_id][i].z;
+
+        if (is_top_block_of_water and vy == 1.0f) {
+            vy = 0.875f;
+        }
+        vertices.push_back(vx + x);
+        vertices.push_back(vy + y);
+        vertices.push_back(vz + z);
     }
     shades.reserve(16);
     unsigned char face_shade = m_shades[face_id];
@@ -387,7 +406,8 @@ void Renderer::add_face(int face_id, int x, int y, int z,
 
 
 }
-bool Renderer::is_solid(const MeshJob& job, int x, int y, int z, unsigned int current_material) {
+
+unsigned short Renderer::get_block_material(const MeshJob& job, int x, int y, int z) {
     int dx = (x < 0) ? -1 : (x > 15 ? 1 : 0);
     int dy = (y < 0) ? -1 : (y > 15 ? 1 : 0);
     int dz = (z < 0) ? -1 : (z > 15 ? 1 : 0);
@@ -399,13 +419,14 @@ bool Renderer::is_solid(const MeshJob& job, int x, int y, int z, unsigned int cu
     int lx = ((x % 16) + 16) % 16;
     int ly = ((y % 16) + 16) % 16;
     int lz = ((z % 16) + 16) % 16;
-    if (World::BLOCK_MATERIALS::is_solid(current_material)){
-        return World::BLOCK_MATERIALS::is_solid(job.neighbour_chunks[index]->m_blocks[lz + ly * 16 + lx * 256].m_material_type);
-    }
-    if (World::BLOCK_MATERIALS::is_transparent(current_material)){
-        return World::BLOCK_MATERIALS::is_solid(job.neighbour_chunks[index]->m_blocks[lz + ly * 16 + lx * 256].m_material_type)
-                or job.neighbour_chunks[index]->m_blocks[lz + ly * 16 + lx * 256].m_material_type == current_material;
-    }
+    // if (World::BLOCK_MATERIALS::is_solid(current_material)){
+    //     return World::BLOCK_MATERIALS::is_solid(job.neighbour_chunks[index]->m_blocks[lz + ly * 16 + lx * 256].m_material_type);
+    // }
+    // if (World::BLOCK_MATERIALS::is_transparent(current_material)){
+    //     return World::BLOCK_MATERIALS::is_solid(job.neighbour_chunks[index]->m_blocks[lz + ly * 16 + lx * 256].m_material_type)
+    //             or job.neighbour_chunks[index]->m_blocks[lz + ly * 16 + lx * 256].m_material_type == current_material;
+    // }
+    return job.neighbour_chunks[index]->m_blocks[lz + ly * 16 + lx * 256].m_material_type;
 }
 
 
@@ -416,9 +437,9 @@ unsigned char Renderer::compute_ao(const MeshJob& job, int x, int y, int z,
                                    int dcx, int dcy, int dcz,
                                    unsigned int block_material)   // corner diagonal
 {
-    bool side1  = is_solid(job, x + dx1, y + dy1, z + dz1, block_material);
-    bool side2  = is_solid(job, x + dx2, y + dy2, z + dz2, block_material);
-    bool corner = is_solid(job, x + dcx, y + dcy, z + dcz, block_material);
+    bool side1  = World::BLOCK_MATERIALS::is_solid(get_block_material(job, x + dx1, y + dy1, z + dz1));
+    bool side2  = World::BLOCK_MATERIALS::is_solid(get_block_material(job, x + dx2, y + dy2, z + dz2));
+    bool corner = World::BLOCK_MATERIALS::is_solid(get_block_material(job, x + dcx, y + dcy, z + dcz));
 
     int ao;
     if (side1 && side2)

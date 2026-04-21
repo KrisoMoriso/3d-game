@@ -181,7 +181,7 @@ void World::generate_chunk(GenerationJob generation_job,
             int surface_y = base_height + (int)(shaped_macro * 60.0f) + (int)(val_micro * 6.0f);
             constexpr int SAND_LEVEL = 110;
             constexpr int MOUNTAIN_LEVEL = 190;
-            constexpr int WATER_LEVEL = 112;
+            constexpr int WATER_LEVEL = 116;
 
             for (int y = 0; y <= 15; ++y) {
                 int world_y = result.chunk_pos.y * 16 + y;
@@ -202,6 +202,9 @@ void World::generate_chunk(GenerationJob generation_job,
                         current_material = BLOCK_MATERIALS::STONE;
                     } else{
                         current_material = BLOCK_MATERIALS::GRASS_BLOCK;
+                        if (world_y < WATER_LEVEL - 1){
+                            current_material = BLOCK_MATERIALS::DIRT;
+                        }
                     }
                 }
                 else if (world_y > surface_y -4){
@@ -234,7 +237,7 @@ void World::generate_chunk(GenerationJob generation_job,
                             carve_threshold += (5 - depth_from_surface) * 0.008f;
                         }
 
-                        if (std::abs(cave_val) < carve_threshold) {
+                        if (std::abs(cave_val) < carve_threshold and BLOCK_MATERIALS::is_solid(current_material)) {
                             current_material = BLOCK_MATERIALS::AIR;
                         }
                     }

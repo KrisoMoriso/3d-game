@@ -8,7 +8,7 @@
 
 Player::Player(){
     m_camera = { 0 };
-    m_camera.position = (Vector3){ 20.5f, World::WORLD_CHUNK_HEIGHT*16 - 10, 10.5f }; // Camera position
+    m_camera.position = (Vector3){ -150.0f, World::WORLD_CHUNK_HEIGHT*16 - 10, -193.5f }; // Camera position
     m_position = m_camera.position;
     m_camera.target = (Vector3){ 0.0f, 0.0f, 0.0f };      // Camera looking at point
     m_camera.target =

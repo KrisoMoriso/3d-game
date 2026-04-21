@@ -42,9 +42,10 @@ private:
     bool are_chunk_neighbours_ready(World::ChunkPos chunk_pos);
     MeshJob pack_mesh_job(World::ChunkPos chunk_pos);
     void update_mesh_chunk(MeshJob mesh_job, ThreadPool::SafeQueue<MeshResult>& result_queue);
-    void perform_culling(int x, int y, int z, unsigned short block_material, std::vector<float>& vertices,
+    void perform_culling(int x, int y, int z, unsigned short current_block_material, std::vector<float>& vertices,
                          std::vector<float>& texcoords, std::vector<unsigned short>& indices,
                          std::vector<unsigned char>& shades, int& indice_counter, const MeshJob& mesh_job);
+    bool should_render_face(unsigned short current_material, unsigned short neighbour_material);
     void add_face(int face_id, int x, int y, int z,
                   unsigned short block_material,
                   std::vector<float>& vertices,
@@ -64,7 +65,7 @@ private:
     unsigned char compute_ao(const MeshJob& job, int x, int y, int z, int dx1, int dy1, int dz1, int dx2, int dy2,
                              int dz2,
                              int dcx, int dcy, int dcz, unsigned int block_material);
-    bool is_solid(const MeshJob& job, int x, int y, int z, unsigned int current_material);
+    unsigned short get_block_material(const MeshJob& job, int x, int y, int z);
 
     struct AONeighbor { int dx, dy, dz; };
     struct AOVertex { AONeighbor s1, s2, corner; };

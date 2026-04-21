@@ -7,9 +7,9 @@
 #include "raylib.h"
 
 
-class Chunk {// TODO: change vector to array
+class Chunk {
 public:
-    std::vector<Block> m_blocks;
+    std::array<Block, 4096> m_blocks;
     Chunk();
     unsigned short getBlockMaterial(Vector3 position);//position relative to the chunk
     bool m_is_meshing = false;
