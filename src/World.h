@@ -18,6 +18,7 @@ public:
         static constexpr unsigned short OAK_PLANKS = 4;
         static constexpr unsigned short OAK_LOG = 5;
         static constexpr unsigned short SAND = 6;
+        static constexpr unsigned short WATER = 7;
         static std::string match_material(unsigned short material){
             if (material == 0){return "AIR";}
             if (material == 1){return "DIRT";}
@@ -27,6 +28,18 @@ public:
             if (material == 5) {return "OAK_LOG";}
             if (material == 6) {return "SAND";}
             return "UNKNOWN";
+        }
+        static bool is_solid(unsigned short material){
+           if (material == 1 or material == 2 or material == 3 or material == 4 or material == 5 or material == 6){
+               return true;
+           }
+           return false;
+        }
+        static bool is_transparent(unsigned short material){
+            if (material == 7){
+                return true;
+            }
+            return false;
         }
     };
     struct ChunkPos{

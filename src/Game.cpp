@@ -84,16 +84,17 @@ void Game::escape_menu(){
     if (!m_is_escape_menu) return;
     ImGuiStyle& style = ImGui::GetStyle();
     style.FontScaleMain = 2;
-
     ImGuiWindowFlags window_flags;
     window_flags |= ImGuiWindowFlags_NoTitleBar;
-    window_flags |= ImGuiWindowFlags_NoBackground;
+    // window_flags |= ImGuiWindowFlags_NoBackground;
     window_flags |= ImGuiWindowFlags_NoMove;
     window_flags |= ImGuiWindowFlags_NoResize;
     ImGui::SetNextWindowPos(ImVec2(GetScreenWidth() / 2 - 400 , GetScreenHeight() / 2 - 350), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(800, 700), ImGuiCond_Always);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, {0.0f, 0.0f,0.0f,0.5f});
     bool open = true;
     ImGui::Begin("Escape", &open, window_flags);
+    ImGui::PopStyleColor();
     if (ImGui::Button("Quit", ImVec2{70, 30})){
         m_window_should_close = true;
     }

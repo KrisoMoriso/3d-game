@@ -17,6 +17,8 @@ public:
     // remeshes needed chunks after world interaction
     void update_block_meshes(World::ChunkPos chunk_pos, int local_x, int local_y, int local_z);
     std::unordered_map<World::ChunkPos, Mesh, World::ChunkPosHash> m_chunk_meshes;
+    std::unordered_map<World::ChunkPos, Mesh, World::ChunkPosHash> m_chunk_meshes_transparent;
+
 private:
     Model m_cube_model;
     struct MeshResult{
@@ -24,6 +26,10 @@ private:
         std::vector<float> texcoords;
         std::vector<unsigned short> indices;
         std::vector<unsigned char> shades;
+        std::vector<float> vertices_transparent;
+        std::vector<float> texcoords_transparent;
+        std::vector<unsigned short> indices_transparent;
+        std::vector<unsigned char> shades_transparent;
         World::ChunkPos chunk_pos;
     };
     struct MeshJob{
@@ -36,6 +42,9 @@ private:
     bool are_chunk_neighbours_ready(World::ChunkPos chunk_pos);
     MeshJob pack_mesh_job(World::ChunkPos chunk_pos);
     void update_mesh_chunk(MeshJob mesh_job, ThreadPool::SafeQueue<MeshResult>& result_queue);
+    void perform_culling(int x, int y, int z, unsigned short block_material, std::vector<float>& vertices,
+                         std::vector<float>& texcoords, std::vector<unsigned short>& indices,
+                         std::vector<unsigned char>& shades, int& indice_counter, const MeshJob& mesh_job);
     void add_face(int face_id, int x, int y, int z,
                   unsigned short block_material,
                   std::vector<float>& vertices,
@@ -51,11 +60,11 @@ private:
     World::ChunkPos m_last_player_chunk;
     std::vector<World::ChunkPos> m_chunks_to_unload;
     static Vector2 get_atlas_coords(unsigned short material_type, int face_id);
-    void upload_mesh_to_gpu(const MeshResult& mesh);
+    void upload_mesh_to_gpu(const MeshResult& mesh_result);
     unsigned char compute_ao(const MeshJob& job, int x, int y, int z, int dx1, int dy1, int dz1, int dx2, int dy2,
                              int dz2,
-                             int dcx, int dcy, int dcz);
-    bool is_solid(const MeshJob& job, int x, int y, int z);
+                             int dcx, int dcy, int dcz, unsigned int block_material);
+    bool is_solid(const MeshJob& job, int x, int y, int z, unsigned int current_material);
 
     struct AONeighbor { int dx, dy, dz; };
     struct AOVertex { AONeighbor s1, s2, corner; };

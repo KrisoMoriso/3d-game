@@ -7,7 +7,7 @@
 #include "raylib.h"
 
 
-class Chunk {
+class Chunk {// TODO: change vector to array
 public:
     std::vector<Block> m_blocks;
     Chunk();

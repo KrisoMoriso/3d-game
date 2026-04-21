@@ -181,13 +181,18 @@ void World::generate_chunk(GenerationJob generation_job,
             int surface_y = base_height + (int)(shaped_macro * 60.0f) + (int)(val_micro * 6.0f);
             constexpr int SAND_LEVEL = 110;
             constexpr int MOUNTAIN_LEVEL = 190;
+            constexpr int WATER_LEVEL = 112;
 
             for (int y = 0; y <= 15; ++y) {
                 int world_y = result.chunk_pos.y * 16 + y;
                 unsigned short current_material = BLOCK_MATERIALS::AIR;
 
                 if (world_y > surface_y){
-                    current_material = BLOCK_MATERIALS::AIR;
+                    if (world_y < WATER_LEVEL){
+                        current_material = BLOCK_MATERIALS::WATER;
+                    } else{
+                        current_material = BLOCK_MATERIALS::AIR;
+                    }
                 }
                 else if (world_y == surface_y){
                     if (world_y < SAND_LEVEL){

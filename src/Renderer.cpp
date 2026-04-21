@@ -85,7 +85,12 @@ void Renderer::update_meshes(Vector3 player_pos){
             UnloadMesh(it->second);
             m_chunk_meshes.erase(it);
             unloaded_this_frame++;
-
+        }
+        auto it_transparent = m_chunk_meshes_transparent.find(to_erase);
+        if (it_transparent != m_chunk_meshes_transparent.end()){
+            UnloadMesh(it_transparent->second);
+            m_chunk_meshes_transparent.erase(it_transparent);
+            unloaded_this_frame++;
         }
     }
 }
@@ -97,6 +102,8 @@ void Renderer::render_chunks(Vector3 player_pos)
 
     Frustum frustum = extract_frustum();
 
+    std::vector<std::pair<World::ChunkPos, Mesh>> transparent_draw_list;
+
     for (auto& pair : m_chunk_meshes){
         World::ChunkPos chunk_pos = pair.first;
         if (pair.first.x >= player_chunk.x - render_distance and pair.first.x <= player_chunk.x + render_distance
@@ -106,11 +113,42 @@ void Renderer::render_chunks(Vector3 player_pos)
             Vector3 chunk_min = { float(chunk_pos.x * 16), float(chunk_pos.y * 16), float(chunk_pos.z * 16) };
             Vector3 chunk_max = { float(chunk_pos.x * 16 + 16), float(chunk_pos.y * 16 + 16), float(chunk_pos.z * 16 + 16) };
 
-            if (check_aabb_against_frustum(frustum, chunk_min, chunk_max) and pair.second.triangleCount > 0){
-                DrawMesh(pair.second, ResourceManager::Get().WORLD_MATERIAL, MatrixTranslate(float(chunk_pos.x *16), float(chunk_pos.y *16), float(chunk_pos.z *16)));
-            }
+            if (check_aabb_against_frustum(frustum, chunk_min, chunk_max)){
+                if (pair.second.triangleCount > 0){
+                    Matrix translation = MatrixTranslate(float(chunk_pos.x *16), float(chunk_pos.y *16), float(chunk_pos.z *16));
+                    DrawMesh(pair.second, ResourceManager::Get().WORLD_MATERIAL, translation);
                 }
+                auto it = m_chunk_meshes_transparent.find(pair.first);
+                if (it != m_chunk_meshes_transparent.end() and it->second.triangleCount > 0) {
+                    transparent_draw_list.emplace_back(chunk_pos, it->second);
+                }
+            }
+
+        }
     }
+    std::sort(transparent_draw_list.begin(), transparent_draw_list.end(),
+        [player_pos](const std::pair<World::ChunkPos, Mesh>& a, const std::pair<World::ChunkPos, Mesh>& b) {
+
+            // Calculate distance to chunk 'a' center
+            float dx_a = (a.first.x * 16.0f + 8.0f) - player_pos.x;
+            float dy_a = (a.first.y * 16.0f + 8.0f) - player_pos.y;
+            float dz_a = (a.first.z * 16.0f + 8.0f) - player_pos.z;
+            float distA = dx_a*dx_a + dy_a*dy_a + dz_a*dz_a;
+
+            // Calculate distance to chunk 'b' center
+            float dx_b = (b.first.x * 16.0f + 8.0f) - player_pos.x;
+            float dy_b = (b.first.y * 16.0f + 8.0f) - player_pos.y;
+            float dz_b = (b.first.z * 16.0f + 8.0f) - player_pos.z;
+            float distB = dx_b*dx_b + dy_b*dy_b + dz_b*dz_b;
+
+            return distA > distB; // > means furthest chunk is at the beginning of the list
+    });
+    for (auto transparent_chunk : transparent_draw_list){
+        Matrix translation = MatrixTranslate(float(transparent_chunk.first.x *16), float(transparent_chunk.first.y *16), float(transparent_chunk.first.z *16));
+        DrawMesh(transparent_chunk.second, ResourceManager::Get().WORLD_MATERIAL, translation);
+
+    }
+
 }
 
 
@@ -178,54 +216,76 @@ void Renderer::update_mesh_chunk(MeshJob mesh_job, ThreadPool::SafeQueue<MeshRes
     std::vector<float> texcoords;
     std::vector<unsigned short> indices;
     std::vector<unsigned char> shades;
+    std::vector<float> vertices_transparent;
+    std::vector<float> texcoords_transparent;
+    std::vector<unsigned short> indices_transparent;
+    std::vector<unsigned char> shades_transparent;
     World::ChunkPos chunk_pos = mesh_job.chunk_pos;
     const Block* current_block = mesh_job.center_chunk->m_blocks.data();
 
     int indice_counter = 0;
+    int indice_counter_transparent = 0;
     for (int x = 0; x < 16; ++x){
         for (int y = 0; y < 16; ++y){
             for (int z = 0; z < 16; ++z){
-                if (current_block->m_material_type != 0){
-                    //culling
-                    //check if block is at chunk edge
-                    //check X-
-                    if (!is_solid(mesh_job, x - 1, y, z)){
-                        add_face(2, x, y, z,current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter, mesh_job);
-                    }
-                    //X+
-                    // X+
-                    if (!is_solid(mesh_job, x + 1, y, z)) {
-                        add_face(3, x, y, z, current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter, mesh_job);
-                    }
-                    // Z-
-                    if (!is_solid(mesh_job, x, y, z - 1)) {
-                        add_face(1, x, y, z, current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter, mesh_job);
-                    }
-                    // Z+
-                    if (!is_solid(mesh_job, x, y, z + 1)) {
-                        add_face(0, x, y, z, current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter, mesh_job);
-                    }
-                    // Y-
-                    if (!is_solid(mesh_job, x, y - 1, z)) {
-                        add_face(5, x, y, z, current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter, mesh_job);
-                    }
-                    // Y+
-                    if (!is_solid(mesh_job, x, y + 1, z)) {
-                        add_face(4, x, y, z, current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter, mesh_job);
-                    }
-
+                if (World::BLOCK_MATERIALS::is_solid(current_block->m_material_type)){
+                    perform_culling(x, y, z, current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter, mesh_job);
+                } else if (World::BLOCK_MATERIALS::is_transparent(current_block->m_material_type)){
+                    perform_culling(x, y, z, current_block->m_material_type, vertices_transparent, texcoords_transparent, indices_transparent, shades_transparent, indice_counter_transparent, mesh_job);
                 }
                 current_block++;
             }
         }
     }
     MeshResult mesh_result;
-    mesh_result.indices = indices;
-    mesh_result.shades = shades;
-    mesh_result.texcoords = texcoords;
-    mesh_result.vertices = vertices;
+    mesh_result.indices = std::move(indices);
+    mesh_result.shades = std::move(shades);
+    mesh_result.texcoords = std::move(texcoords);
+    mesh_result.vertices = std::move(vertices);
+
+    mesh_result.indices_transparent = std::move(indices_transparent);
+    mesh_result.shades_transparent = std::move(shades_transparent);
+    mesh_result.texcoords_transparent = std::move(texcoords_transparent);
+    mesh_result.vertices_transparent = std::move(vertices_transparent);
+
     mesh_result.chunk_pos = chunk_pos;
     result_queue.push(std::move(mesh_result));
+}
+
+
+void Renderer::perform_culling(int x, int y, int z,
+                        unsigned short block_material,
+                        std::vector<float>& vertices,
+                        std::vector<float>& texcoords,
+                        std::vector<unsigned short>& indices,
+                        std::vector<unsigned char>& shades,
+                        int& indice_counter, const MeshJob& mesh_job){
+    //check if block is at chunk edge
+    //check X-
+    if (!is_solid(mesh_job, x - 1, y, z, block_material)){
+        add_face(2, x, y, z,block_material, vertices, texcoords, indices, shades, indice_counter, mesh_job);
+    }
+    //X+
+    // X+
+    if (!is_solid(mesh_job, x + 1, y, z, block_material)) {
+        add_face(3, x, y, z, block_material, vertices, texcoords, indices, shades, indice_counter, mesh_job);
+    }
+    // Z-
+    if (!is_solid(mesh_job, x, y, z - 1, block_material)) {
+        add_face(1, x, y, z, block_material, vertices, texcoords, indices, shades, indice_counter, mesh_job);
+    }
+    // Z+
+    if (!is_solid(mesh_job, x, y, z + 1, block_material)) {
+        add_face(0, x, y, z, block_material, vertices, texcoords, indices, shades, indice_counter, mesh_job);
+    }
+    // Y-
+    if (!is_solid(mesh_job, x, y - 1, z, block_material)) {
+        add_face(5, x, y, z, block_material, vertices, texcoords, indices, shades, indice_counter, mesh_job);
+    }
+    // Y+
+    if (!is_solid(mesh_job, x, y + 1, z, block_material)) {
+        add_face(4, x, y, z, block_material, vertices, texcoords, indices, shades, indice_counter, mesh_job);
+    }
 }
 
 
@@ -256,6 +316,8 @@ Vector2 Renderer::get_atlas_coords(unsigned short material_type, int face_id){
         }
     } else if (material_type == World::BLOCK_MATERIALS::SAND){
         atlas_pos_y = 3.0f;
+    } else if (material_type == World::BLOCK_MATERIALS::WATER){
+        atlas_pos_y = 4.0f;
     }
     return Vector2{atlas_pos_x, atlas_pos_y};
 }
@@ -282,9 +344,9 @@ void Renderer::add_face(int face_id, int x, int y, int z,
     for (int i = 0; i < 4; ++i){
         const auto& aov = ao_neighbors[face_id][i];
         unsigned char ao = compute_ao(job, x, y, z,
-            aov.s1.dx, aov.s1.dy, aov.s1.dz,
-            aov.s2.dx, aov.s2.dy, aov.s2.dz,
-            aov.corner.dx, aov.corner.dy, aov.corner.dz);
+                                      aov.s1.dx, aov.s1.dy, aov.s1.dz,
+                                      aov.s2.dx, aov.s2.dy, aov.s2.dz,
+                                      aov.corner.dx, aov.corner.dy, aov.corner.dz, block_material);
 
         ao_results[i] = ao;
         unsigned char combined = (unsigned char)((int)face_shade * ao / 255);
@@ -325,7 +387,7 @@ void Renderer::add_face(int face_id, int x, int y, int z,
 
 
 }
-bool Renderer::is_solid(const MeshJob& job, int x, int y, int z) {
+bool Renderer::is_solid(const MeshJob& job, int x, int y, int z, unsigned int current_material) {
     int dx = (x < 0) ? -1 : (x > 15 ? 1 : 0);
     int dy = (y < 0) ? -1 : (y > 15 ? 1 : 0);
     int dz = (z < 0) ? -1 : (z > 15 ? 1 : 0);
@@ -337,8 +399,13 @@ bool Renderer::is_solid(const MeshJob& job, int x, int y, int z) {
     int lx = ((x % 16) + 16) % 16;
     int ly = ((y % 16) + 16) % 16;
     int lz = ((z % 16) + 16) % 16;
-
-    return job.neighbour_chunks[index]->m_blocks[lz + ly * 16 + lx * 256].m_material_type != World::BLOCK_MATERIALS::AIR;
+    if (World::BLOCK_MATERIALS::is_solid(current_material)){
+        return World::BLOCK_MATERIALS::is_solid(job.neighbour_chunks[index]->m_blocks[lz + ly * 16 + lx * 256].m_material_type);
+    }
+    if (World::BLOCK_MATERIALS::is_transparent(current_material)){
+        return World::BLOCK_MATERIALS::is_solid(job.neighbour_chunks[index]->m_blocks[lz + ly * 16 + lx * 256].m_material_type)
+                or job.neighbour_chunks[index]->m_blocks[lz + ly * 16 + lx * 256].m_material_type == current_material;
+    }
 }
 
 
@@ -346,11 +413,12 @@ bool Renderer::is_solid(const MeshJob& job, int x, int y, int z) {
 unsigned char Renderer::compute_ao(const MeshJob& job, int x, int y, int z,
                                    int dx1, int dy1, int dz1,   // side 1
                                    int dx2, int dy2, int dz2,   // side 2
-                                   int dcx, int dcy, int dcz)   // corner diagonal
+                                   int dcx, int dcy, int dcz,
+                                   unsigned int block_material)   // corner diagonal
 {
-    bool side1  = is_solid(job, x + dx1, y + dy1, z + dz1);
-    bool side2  = is_solid(job, x + dx2, y + dy2, z + dz2);
-    bool corner = is_solid(job, x + dcx, y + dcy, z + dcz);
+    bool side1  = is_solid(job, x + dx1, y + dy1, z + dz1, block_material);
+    bool side2  = is_solid(job, x + dx2, y + dy2, z + dz2, block_material);
+    bool corner = is_solid(job, x + dcx, y + dcy, z + dcz, block_material);
 
     int ao;
     if (side1 && side2)
@@ -363,30 +431,51 @@ unsigned char Renderer::compute_ao(const MeshJob& job, int x, int y, int z,
 }
 
 
-void Renderer::upload_mesh_to_gpu(const MeshResult& mesh){
-    World::ChunkPos chunk_pos = mesh.chunk_pos;
-    Mesh cubeMesh = {0};
-    cubeMesh.vertexCount = mesh.vertices.size()/3;
-    cubeMesh.triangleCount = mesh.indices.size()/3;
-    cubeMesh.vertices = (float *)MemAlloc(cubeMesh.vertexCount * 3 * sizeof(float));
-    cubeMesh.texcoords = (float *)MemAlloc(cubeMesh.vertexCount * 2 * sizeof(float));
-    cubeMesh.indices = (unsigned short *)MemAlloc(cubeMesh.triangleCount * 3 * sizeof(unsigned short));
-    cubeMesh.colors = (unsigned char *)MemAlloc(cubeMesh.vertexCount * 4 * sizeof(unsigned char));
+void Renderer::upload_mesh_to_gpu(const MeshResult& mesh_result){
+    World::ChunkPos chunk_pos = mesh_result.chunk_pos;
+    Mesh mesh = {0};
+    mesh.vertexCount = mesh_result.vertices.size()/3;
+    mesh.triangleCount = mesh_result.indices.size()/3;
+    mesh.vertices = (float *)MemAlloc(mesh.vertexCount * 3 * sizeof(float));
+    mesh.texcoords = (float *)MemAlloc(mesh.vertexCount * 2 * sizeof(float));
+    mesh.indices = (unsigned short *)MemAlloc(mesh.triangleCount * 3 * sizeof(unsigned short));
+    mesh.colors = (unsigned char *)MemAlloc(mesh.vertexCount * 4 * sizeof(unsigned char));
 
-    memcpy(cubeMesh.vertices, mesh.vertices.data(), mesh.vertices.size()*sizeof(float));
-    memcpy(cubeMesh.texcoords, mesh.texcoords.data(), mesh.texcoords.size() * sizeof(float));
-    memcpy(cubeMesh.indices, mesh.indices.data(), mesh.indices.size()*sizeof(unsigned short));
-    memcpy(cubeMesh.colors, mesh.shades.data(), mesh.shades.size()* sizeof(unsigned char) );
-    UploadMesh(&cubeMesh, true);
+    memcpy(mesh.vertices, mesh_result.vertices.data(), mesh_result.vertices.size()*sizeof(float));
+    memcpy(mesh.texcoords, mesh_result.texcoords.data(), mesh_result.texcoords.size() * sizeof(float));
+    memcpy(mesh.indices, mesh_result.indices.data(), mesh_result.indices.size()*sizeof(unsigned short));
+    memcpy(mesh.colors, mesh_result.shades.data(), mesh_result.shades.size()* sizeof(unsigned char) );
+    UploadMesh(&mesh, true);
 
     if (m_chunk_meshes.contains(chunk_pos)){
         UnloadMesh(m_chunk_meshes[chunk_pos]);
         m_chunk_meshes.erase(chunk_pos);
     }
 
-    m_chunk_meshes[chunk_pos] = cubeMesh;
-    auto it = Game::Get().m_world.m_chunks.find(chunk_pos);
+    m_chunk_meshes[chunk_pos] = mesh;
+    //fdsdgfdsgf
+    Mesh mesh_transparent = {0};
+    mesh_transparent.vertexCount = mesh_result.vertices_transparent.size()/3;
+    mesh_transparent.triangleCount = mesh_result.indices_transparent.size()/3;
+    mesh_transparent.vertices = (float *)MemAlloc(mesh_transparent.vertexCount * 3 * sizeof(float));
+    mesh_transparent.texcoords = (float *)MemAlloc(mesh_transparent.vertexCount * 2 * sizeof(float));
+    mesh_transparent.indices = (unsigned short *)MemAlloc(mesh_transparent.triangleCount * 3 * sizeof(unsigned short));
+    mesh_transparent.colors = (unsigned char *)MemAlloc(mesh_transparent.vertexCount * 4 * sizeof(unsigned char));
 
+    memcpy(mesh_transparent.vertices, mesh_result.vertices_transparent.data(), mesh_result.vertices_transparent.size()*sizeof(float));
+    memcpy(mesh_transparent.texcoords, mesh_result.texcoords_transparent.data(), mesh_result.texcoords_transparent.size() * sizeof(float));
+    memcpy(mesh_transparent.indices, mesh_result.indices_transparent.data(), mesh_result.indices_transparent.size()*sizeof(unsigned short));
+    memcpy(mesh_transparent.colors, mesh_result.shades_transparent.data(), mesh_result.shades_transparent.size()* sizeof(unsigned char) );
+    UploadMesh(&mesh_transparent, true);
+
+    if (m_chunk_meshes_transparent.contains(chunk_pos)){
+        UnloadMesh(m_chunk_meshes_transparent[chunk_pos]);
+        m_chunk_meshes_transparent.erase(chunk_pos);
+    }
+
+    m_chunk_meshes_transparent[chunk_pos] = mesh_transparent;
+
+    auto it = Game::Get().m_world.m_chunks.find(chunk_pos);
     if (it != Game::Get().m_world.m_chunks.end()) it->second->m_is_meshing = false;
 }
 
