@@ -31,7 +31,7 @@ void Renderer::update_meshes(Vector3 player_pos){
 
                 if (it != Game::Get().m_world.m_chunks.end()) {
                     auto& chunk = it->second;
-                    if (!m_chunk_meshes.contains(pos) and !chunk->m_is_meshing and !chunk->m_is_generating and are_chunk_neighbours_ready(pos)) {
+                    if ( !chunk->m_is_meshing and !chunk->m_is_generating and !m_chunk_meshes.contains(pos) and are_chunk_neighbours_ready(pos)) {
                         m_queue_to_mesh.push_back(pos);
                         chunk->m_is_meshing = true;
                         needs_sorting = true;
@@ -74,12 +74,6 @@ void Renderer::update_meshes(Vector3 player_pos){
     while (!m_chunks_to_unload.empty() and unloaded_this_frame < max_unloads){
         World::ChunkPos to_erase = m_chunks_to_unload.back();
         m_chunks_to_unload.pop_back();
-
-        // if (to_erase.x >= chunk_pos.x - render_distance && to_erase.x <= chunk_pos.x + render_distance &&
-        // to_erase.z >= chunk_pos.z - render_distance && to_erase.z <= chunk_pos.z + render_distance) {
-        //     continue;
-        // }
-
         auto it = m_chunk_meshes.find(to_erase);
         if (it != m_chunk_meshes.end()){
             UnloadMesh(it->second);
@@ -143,10 +137,9 @@ void Renderer::render_chunks(Vector3 player_pos)
 
             return distA > distB; // > means furthest chunk is at the beginning of the list
     });
-    for (auto transparent_chunk : transparent_draw_list){
+    for (const auto& transparent_chunk : transparent_draw_list){
         Matrix translation = MatrixTranslate(float(transparent_chunk.first.x *16), float(transparent_chunk.first.y *16), float(transparent_chunk.first.z *16));
         DrawMesh(transparent_chunk.second, ResourceManager::Get().WORLD_MATERIAL, translation);
-
     }
 
 }
@@ -201,10 +194,8 @@ Renderer::MeshJob Renderer::pack_mesh_job(World::ChunkPos chunk_pos){
 
 }
 
-void Renderer::update_mesh_chunk(MeshJob mesh_job, ThreadPool::SafeQueue<MeshResult>& result_queue)
+void Renderer::update_mesh_chunk(const MeshJob& mesh_job, ThreadPool::SafeQueue<MeshResult>& result_queue)
 {
-
-
     std::vector<std::shared_lock<std::shared_mutex>> locks;
     locks.reserve(27);
     for (int i = 0; i < 27; ++i) {
@@ -216,10 +207,18 @@ void Renderer::update_mesh_chunk(MeshJob mesh_job, ThreadPool::SafeQueue<MeshRes
     std::vector<float> texcoords;
     std::vector<unsigned short> indices;
     std::vector<unsigned char> shades;
+    vertices.reserve(4096);
+    texcoords.reserve(4096);
+    indices.reserve(2048);
+    shades.reserve(4096);
     std::vector<float> vertices_transparent;
     std::vector<float> texcoords_transparent;
     std::vector<unsigned short> indices_transparent;
     std::vector<unsigned char> shades_transparent;
+    vertices_transparent.reserve(4096);
+    texcoords_transparent.reserve(4096);
+    indices_transparent.reserve(2048);
+    shades_transparent.reserve(4096);
     World::ChunkPos chunk_pos = mesh_job.chunk_pos;
     const Block* current_block = mesh_job.center_chunk->m_blocks.data();
 
@@ -288,7 +287,8 @@ void Renderer::perform_culling(int x, int y, int z,
     }
     // Y+
     neighbour_material = get_block_material(mesh_job, x, y + 1, z);
-    if (should_render_face(current_block_material, neighbour_material)) {
+    if (should_render_face(current_block_material, neighbour_material) or
+        (current_block_material == World::BLOCK_MATERIALS::WATER and neighbour_material != World::BLOCK_MATERIALS::WATER)) {
         add_face(4, x, y, z, current_block_material, vertices, texcoords, indices, shades, indice_counter, mesh_job);
     }
 }
@@ -343,7 +343,6 @@ void Renderer::add_face(int face_id, int x, int y, int z,
                         int& indice_counter, const MeshJob& job
 ){
     bool is_top_block_of_water = block_material == World::BLOCK_MATERIALS::WATER and get_block_material(job, x, y + 1, z) != World::BLOCK_MATERIALS::WATER;
-    vertices.reserve(12);
     for (int i = 0; i < 4; ++i){
         float vx = m_face_vertices[face_id][i].x;
         float vy = m_face_vertices[face_id][i].y;
@@ -356,7 +355,6 @@ void Renderer::add_face(int face_id, int x, int y, int z,
         vertices.push_back(vy + y);
         vertices.push_back(vz + z);
     }
-    shades.reserve(16);
     unsigned char face_shade = m_shades[face_id];
     unsigned char ao_results[4];
 
@@ -419,13 +417,6 @@ unsigned short Renderer::get_block_material(const MeshJob& job, int x, int y, in
     int lx = ((x % 16) + 16) % 16;
     int ly = ((y % 16) + 16) % 16;
     int lz = ((z % 16) + 16) % 16;
-    // if (World::BLOCK_MATERIALS::is_solid(current_material)){
-    //     return World::BLOCK_MATERIALS::is_solid(job.neighbour_chunks[index]->m_blocks[lz + ly * 16 + lx * 256].m_material_type);
-    // }
-    // if (World::BLOCK_MATERIALS::is_transparent(current_material)){
-    //     return World::BLOCK_MATERIALS::is_solid(job.neighbour_chunks[index]->m_blocks[lz + ly * 16 + lx * 256].m_material_type)
-    //             or job.neighbour_chunks[index]->m_blocks[lz + ly * 16 + lx * 256].m_material_type == current_material;
-    // }
     return job.neighbour_chunks[index]->m_blocks[lz + ly * 16 + lx * 256].m_material_type;
 }
 
@@ -454,41 +445,43 @@ unsigned char Renderer::compute_ao(const MeshJob& job, int x, int y, int z,
 
 void Renderer::upload_mesh_to_gpu(const MeshResult& mesh_result){
     World::ChunkPos chunk_pos = mesh_result.chunk_pos;
+    if (!Game::Get().m_world.m_chunks.contains(chunk_pos)) return;
     Mesh mesh = {0};
-    mesh.vertexCount = mesh_result.vertices.size()/3;
-    mesh.triangleCount = mesh_result.indices.size()/3;
-    mesh.vertices = (float *)MemAlloc(mesh.vertexCount * 3 * sizeof(float));
-    mesh.texcoords = (float *)MemAlloc(mesh.vertexCount * 2 * sizeof(float));
-    mesh.indices = (unsigned short *)MemAlloc(mesh.triangleCount * 3 * sizeof(unsigned short));
-    mesh.colors = (unsigned char *)MemAlloc(mesh.vertexCount * 4 * sizeof(unsigned char));
+    if (mesh_result.vertices.size() > 0){
+        mesh.vertexCount = mesh_result.vertices.size()/3;
+        mesh.triangleCount = mesh_result.indices.size()/3;
+        mesh.vertices = (float *)MemAlloc(mesh.vertexCount * 3 * sizeof(float));
+        mesh.texcoords = (float *)MemAlloc(mesh.vertexCount * 2 * sizeof(float));
+        mesh.indices = (unsigned short *)MemAlloc(mesh.triangleCount * 3 * sizeof(unsigned short));
+        mesh.colors = (unsigned char *)MemAlloc(mesh.vertexCount * 4 * sizeof(unsigned char));
 
-    memcpy(mesh.vertices, mesh_result.vertices.data(), mesh_result.vertices.size()*sizeof(float));
-    memcpy(mesh.texcoords, mesh_result.texcoords.data(), mesh_result.texcoords.size() * sizeof(float));
-    memcpy(mesh.indices, mesh_result.indices.data(), mesh_result.indices.size()*sizeof(unsigned short));
-    memcpy(mesh.colors, mesh_result.shades.data(), mesh_result.shades.size()* sizeof(unsigned char) );
-    UploadMesh(&mesh, true);
-
+        memcpy(mesh.vertices, mesh_result.vertices.data(), mesh_result.vertices.size()*sizeof(float));
+        memcpy(mesh.texcoords, mesh_result.texcoords.data(), mesh_result.texcoords.size() * sizeof(float));
+        memcpy(mesh.indices, mesh_result.indices.data(), mesh_result.indices.size()*sizeof(unsigned short));
+        memcpy(mesh.colors, mesh_result.shades.data(), mesh_result.shades.size()* sizeof(unsigned char) );
+        UploadMesh(&mesh, true);
+    }
     if (m_chunk_meshes.contains(chunk_pos)){
         UnloadMesh(m_chunk_meshes[chunk_pos]);
         m_chunk_meshes.erase(chunk_pos);
     }
-
     m_chunk_meshes[chunk_pos] = mesh;
-    //fdsdgfdsgf
+
     Mesh mesh_transparent = {0};
-    mesh_transparent.vertexCount = mesh_result.vertices_transparent.size()/3;
-    mesh_transparent.triangleCount = mesh_result.indices_transparent.size()/3;
-    mesh_transparent.vertices = (float *)MemAlloc(mesh_transparent.vertexCount * 3 * sizeof(float));
-    mesh_transparent.texcoords = (float *)MemAlloc(mesh_transparent.vertexCount * 2 * sizeof(float));
-    mesh_transparent.indices = (unsigned short *)MemAlloc(mesh_transparent.triangleCount * 3 * sizeof(unsigned short));
-    mesh_transparent.colors = (unsigned char *)MemAlloc(mesh_transparent.vertexCount * 4 * sizeof(unsigned char));
+    if (mesh_result.vertices_transparent.size() > 0){
+        mesh_transparent.vertexCount = mesh_result.vertices_transparent.size()/3;
+        mesh_transparent.triangleCount = mesh_result.indices_transparent.size()/3;
+        mesh_transparent.vertices = (float *)MemAlloc(mesh_transparent.vertexCount * 3 * sizeof(float));
+        mesh_transparent.texcoords = (float *)MemAlloc(mesh_transparent.vertexCount * 2 * sizeof(float));
+        mesh_transparent.indices = (unsigned short *)MemAlloc(mesh_transparent.triangleCount * 3 * sizeof(unsigned short));
+        mesh_transparent.colors = (unsigned char *)MemAlloc(mesh_transparent.vertexCount * 4 * sizeof(unsigned char));
 
-    memcpy(mesh_transparent.vertices, mesh_result.vertices_transparent.data(), mesh_result.vertices_transparent.size()*sizeof(float));
-    memcpy(mesh_transparent.texcoords, mesh_result.texcoords_transparent.data(), mesh_result.texcoords_transparent.size() * sizeof(float));
-    memcpy(mesh_transparent.indices, mesh_result.indices_transparent.data(), mesh_result.indices_transparent.size()*sizeof(unsigned short));
-    memcpy(mesh_transparent.colors, mesh_result.shades_transparent.data(), mesh_result.shades_transparent.size()* sizeof(unsigned char) );
-    UploadMesh(&mesh_transparent, true);
-
+        memcpy(mesh_transparent.vertices, mesh_result.vertices_transparent.data(), mesh_result.vertices_transparent.size()*sizeof(float));
+        memcpy(mesh_transparent.texcoords, mesh_result.texcoords_transparent.data(), mesh_result.texcoords_transparent.size() * sizeof(float));
+        memcpy(mesh_transparent.indices, mesh_result.indices_transparent.data(), mesh_result.indices_transparent.size()*sizeof(unsigned short));
+        memcpy(mesh_transparent.colors, mesh_result.shades_transparent.data(), mesh_result.shades_transparent.size()* sizeof(unsigned char) );
+        UploadMesh(&mesh_transparent, true);
+    }
     if (m_chunk_meshes_transparent.contains(chunk_pos)){
         UnloadMesh(m_chunk_meshes_transparent[chunk_pos]);
         m_chunk_meshes_transparent.erase(chunk_pos);
@@ -514,11 +507,11 @@ bool Renderer::send_chunk_to_thread(World::ChunkPos chunk_pos, bool is_priority)
 
 
     if (!is_priority){
-        Game::Get().m_thread_pool.enqueue([this, mesh_job](){
+        Game::Get().m_thread_pool.enqueue([this, mesh_job = std::move(mesh_job)](){
            this->update_mesh_chunk(mesh_job, m_result_queue);
         });
     } else{
-        Game::Get().m_thread_pool.enqueue([this, mesh_job](){
+        Game::Get().m_thread_pool.enqueue([this, mesh_job = std::move(mesh_job)](){
            this->update_mesh_chunk(mesh_job, m_result_queue_priority);
         });
     }

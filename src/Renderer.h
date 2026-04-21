@@ -41,7 +41,7 @@ private:
 
     bool are_chunk_neighbours_ready(World::ChunkPos chunk_pos);
     MeshJob pack_mesh_job(World::ChunkPos chunk_pos);
-    void update_mesh_chunk(MeshJob mesh_job, ThreadPool::SafeQueue<MeshResult>& result_queue);
+    void update_mesh_chunk(const MeshJob& mesh_job, ThreadPool::SafeQueue<MeshResult>& result_queue);
     void perform_culling(int x, int y, int z, unsigned short current_block_material, std::vector<float>& vertices,
                          std::vector<float>& texcoords, std::vector<unsigned short>& indices,
                          std::vector<unsigned char>& shades, int& indice_counter, const MeshJob& mesh_job);
