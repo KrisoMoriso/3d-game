@@ -1,12 +1,13 @@
+#include "raylib.h"
 #include "Renderer.h"
+#include "rlgl.h"
 
 #include <format>
-#include <thread>
 
 #include "Game.h"
 #include "raymath.h"
 #include "ResourceManager.h"
-#include "rlgl.h"
+
 
 void Renderer::update_meshes(Vector3 player_pos){
     MeshResult finished_mesh;
@@ -53,7 +54,7 @@ void Renderer::update_meshes(Vector3 player_pos){
         });
     }
 
-    int max_sends = 6;
+    int max_sends = 12;
     int sent_this_frame = 0;
     while (!m_queue_to_mesh_priority.empty()){
         World::ChunkPos pos_queue = m_queue_to_mesh_priority.front();
@@ -76,13 +77,13 @@ void Renderer::update_meshes(Vector3 player_pos){
         m_chunks_to_unload.pop_back();
         auto it = m_chunk_meshes.find(to_erase);
         if (it != m_chunk_meshes.end()){
-            UnloadMesh(it->second);
+            rlUnloadShaderBuffer(it->second.ssboId);
             m_chunk_meshes.erase(it);
             unloaded_this_frame++;
         }
         auto it_transparent = m_chunk_meshes_transparent.find(to_erase);
         if (it_transparent != m_chunk_meshes_transparent.end()){
-            UnloadMesh(it_transparent->second);
+            rlUnloadShaderBuffer(it_transparent->second.ssboId);
             m_chunk_meshes_transparent.erase(it_transparent);
             unloaded_this_frame++;
         }
@@ -96,7 +97,25 @@ void Renderer::render_chunks(Vector3 player_pos)
 
     Frustum frustum = extract_frustum();
 
-    std::vector<std::pair<World::ChunkPos, Mesh>> transparent_draw_list;
+    std::vector<std::pair<World::ChunkPos, ChunkRenderData>> transparent_draw_list;
+
+    // Get your shader ID
+    unsigned int shaderId = ResourceManager::Get().WORLD_MATERIAL.shader.id;
+
+    // We must manually pass the MVP matrix to the shader since we bypass DrawMesh
+    int mvpLoc = GetShaderLocation(ResourceManager::Get().WORLD_MATERIAL.shader, "mvp");
+
+    rlDrawRenderBatchActive(); // Flush anything Raylib was drawing
+    rlEnableShader(shaderId);
+
+    rlActiveTextureSlot(0);
+    rlEnableTexture(ResourceManager::Get().WORLD_MATERIAL.maps[MATERIAL_MAP_ALBEDO].texture.id);
+
+    static unsigned int emptyVAO = 0;
+    if (emptyVAO == 0) {
+        emptyVAO = rlLoadVertexArray();
+    }
+    rlEnableVertexArray(emptyVAO);
 
     for (auto& pair : m_chunk_meshes){
         World::ChunkPos chunk_pos = pair.first;
@@ -108,12 +127,18 @@ void Renderer::render_chunks(Vector3 player_pos)
             Vector3 chunk_max = { float(chunk_pos.x * 16 + 16), float(chunk_pos.y * 16 + 16), float(chunk_pos.z * 16 + 16) };
 
             if (check_aabb_against_frustum(frustum, chunk_min, chunk_max)){
-                if (pair.second.triangleCount > 0){
-                    Matrix translation = MatrixTranslate(float(chunk_pos.x *16), float(chunk_pos.y *16), float(chunk_pos.z *16));
-                    DrawMesh(pair.second, ResourceManager::Get().WORLD_MATERIAL, translation);
+                if (pair.second.faceCount > 0){
+                    auto translation = MatrixTranslate(float(chunk_pos.x *16), float(chunk_pos.y *16), float(chunk_pos.z *16));
+                    auto mvp = MatrixMultiply(translation, MatrixMultiply(rlGetMatrixModelview(), rlGetMatrixProjection()));
+                    // Send Matrix to Shader
+                    rlSetUniformMatrix(mvpLoc, mvp);
+
+                    // Bind the SSBO and Draw!
+                    rlBindShaderBuffer(pair.second.ssboId, 1);
+                    rlDrawVertexArray(0, pair.second.faceCount * 6);
                 }
                 auto it = m_chunk_meshes_transparent.find(pair.first);
-                if (it != m_chunk_meshes_transparent.end() and it->second.triangleCount > 0) {
+                if (it != m_chunk_meshes_transparent.end() and it->second.faceCount > 0) {
                     transparent_draw_list.emplace_back(chunk_pos, it->second);
                 }
             }
@@ -121,7 +146,7 @@ void Renderer::render_chunks(Vector3 player_pos)
         }
     }
     std::sort(transparent_draw_list.begin(), transparent_draw_list.end(),
-        [player_pos](const std::pair<World::ChunkPos, Mesh>& a, const std::pair<World::ChunkPos, Mesh>& b) {
+        [player_pos](const auto& a, const auto& b) {
 
             // Calculate distance to chunk 'a' center
             float dx_a = (a.first.x * 16.0f + 8.0f) - player_pos.x;
@@ -138,9 +163,19 @@ void Renderer::render_chunks(Vector3 player_pos)
             return distA > distB; // > means furthest chunk is at the beginning of the list
     });
     for (const auto& transparent_chunk : transparent_draw_list){
-        Matrix translation = MatrixTranslate(float(transparent_chunk.first.x *16), float(transparent_chunk.first.y *16), float(transparent_chunk.first.z *16));
-        DrawMesh(transparent_chunk.second, ResourceManager::Get().WORLD_MATERIAL, translation);
+        auto translation = MatrixTranslate(float(transparent_chunk.first.x *16), float(transparent_chunk.first.y *16), float(transparent_chunk.first.z *16));
+        auto mvp = MatrixMultiply(translation, MatrixMultiply(rlGetMatrixModelview(), rlGetMatrixProjection()));
+        // Send Matrix to Shader
+        rlSetUniformMatrix(mvpLoc, mvp);
+
+        // Bind the SSBO and Draw!
+        rlBindShaderBuffer(transparent_chunk.second.ssboId, 1);
+        rlDrawVertexArray(0, transparent_chunk.second.faceCount * 6);
+
     }
+    rlDisableVertexArray();
+    rlDisableTexture();
+    rlDisableShader();
 
 }
 
@@ -203,50 +238,28 @@ void Renderer::update_mesh_chunk(const MeshJob& mesh_job, ThreadPool::SafeQueue<
             locks.emplace_back(mesh_job.neighbour_chunks[i]->m_block_mutex);
         }
     }
-    std::vector<float> vertices;
-    std::vector<float> texcoords;
-    std::vector<unsigned short> indices;
-    std::vector<unsigned char> shades;
-    vertices.reserve(4096);
-    texcoords.reserve(4096);
-    indices.reserve(2048);
-    shades.reserve(4096);
-    std::vector<float> vertices_transparent;
-    std::vector<float> texcoords_transparent;
-    std::vector<unsigned short> indices_transparent;
-    std::vector<unsigned char> shades_transparent;
-    vertices_transparent.reserve(4096);
-    texcoords_transparent.reserve(4096);
-    indices_transparent.reserve(2048);
-    shades_transparent.reserve(4096);
+    std::vector<VoxelFaceData> opaque_faces;
+    std::vector<VoxelFaceData> transparent_faces;
+    opaque_faces.reserve(4096);
+    transparent_faces.reserve(4096);
     World::ChunkPos chunk_pos = mesh_job.chunk_pos;
     const Block* current_block = mesh_job.center_chunk->m_blocks.data();
 
-    int indice_counter = 0;
-    int indice_counter_transparent = 0;
     for (int x = 0; x < 16; ++x){
         for (int y = 0; y < 16; ++y){
             for (int z = 0; z < 16; ++z){
                 if (World::BLOCK_MATERIALS::is_solid(current_block->m_material_type)){
-                    perform_culling(x, y, z, current_block->m_material_type, vertices, texcoords, indices, shades, indice_counter, mesh_job);
+                    perform_culling(x, y, z, current_block->m_material_type, opaque_faces, mesh_job);
                 } else if (World::BLOCK_MATERIALS::is_transparent(current_block->m_material_type)){
-                    perform_culling(x, y, z, current_block->m_material_type, vertices_transparent, texcoords_transparent, indices_transparent, shades_transparent, indice_counter_transparent, mesh_job);
+                    perform_culling(x, y, z, current_block->m_material_type, transparent_faces, mesh_job);
                 }
                 current_block++;
             }
         }
     }
     MeshResult mesh_result;
-    mesh_result.indices = std::move(indices);
-    mesh_result.shades = std::move(shades);
-    mesh_result.texcoords = std::move(texcoords);
-    mesh_result.vertices = std::move(vertices);
-
-    mesh_result.indices_transparent = std::move(indices_transparent);
-    mesh_result.shades_transparent = std::move(shades_transparent);
-    mesh_result.texcoords_transparent = std::move(texcoords_transparent);
-    mesh_result.vertices_transparent = std::move(vertices_transparent);
-
+    mesh_result.opaque_faces = std::move(opaque_faces);
+    mesh_result.transparent_faces = std::move(transparent_faces);
     mesh_result.chunk_pos = chunk_pos;
     result_queue.push(std::move(mesh_result));
 }
@@ -254,42 +267,38 @@ void Renderer::update_mesh_chunk(const MeshJob& mesh_job, ThreadPool::SafeQueue<
 
 void Renderer::perform_culling(int x, int y, int z,
                         unsigned short current_block_material,
-                        std::vector<float>& vertices,
-                        std::vector<float>& texcoords,
-                        std::vector<unsigned short>& indices,
-                        std::vector<unsigned char>& shades,
-                        int& indice_counter, const MeshJob& mesh_job){
+                        std::vector<VoxelFaceData>& faces, const MeshJob& mesh_job){
     //check if block is at chunk edge
     //check X-
     unsigned short neighbour_material = get_block_material(mesh_job, x - 1, y, z);
     if (should_render_face(current_block_material, neighbour_material)){
-        add_face(2, x, y, z,current_block_material, vertices, texcoords, indices, shades, indice_counter, mesh_job);
+        add_face(2, x, y, z,current_block_material, faces, mesh_job);
     }
     //X+
     neighbour_material = get_block_material(mesh_job, x + 1, y, z);
     if (should_render_face(current_block_material, neighbour_material)) {
-        add_face(3, x, y, z, current_block_material, vertices, texcoords, indices, shades, indice_counter, mesh_job);
+        add_face(3, x, y, z, current_block_material, faces, mesh_job);
     }
     // Z-
     neighbour_material = get_block_material(mesh_job, x, y, z - 1);
     if (should_render_face(current_block_material, neighbour_material)) {
-        add_face(1, x, y, z, current_block_material, vertices, texcoords, indices, shades, indice_counter, mesh_job);
+        add_face(1, x, y, z, current_block_material, faces, mesh_job);
     }
     // Z+
     neighbour_material = get_block_material(mesh_job, x, y, z + 1);
     if (should_render_face(current_block_material, neighbour_material)) {
-        add_face(0, x, y, z, current_block_material, vertices, texcoords, indices, shades, indice_counter, mesh_job);
+        add_face(0, x, y, z, current_block_material, faces, mesh_job);
     }
     // Y-
     neighbour_material = get_block_material(mesh_job, x, y - 1, z);
     if (should_render_face(current_block_material, neighbour_material)) {
-        add_face(5, x, y, z, current_block_material, vertices, texcoords, indices, shades, indice_counter, mesh_job);
+        add_face(5, x, y, z, current_block_material, faces, mesh_job);
     }
     // Y+
     neighbour_material = get_block_material(mesh_job, x, y + 1, z);
     if (should_render_face(current_block_material, neighbour_material) or
         (current_block_material == World::BLOCK_MATERIALS::WATER and neighbour_material != World::BLOCK_MATERIALS::WATER)) {
-        add_face(4, x, y, z, current_block_material, vertices, texcoords, indices, shades, indice_counter, mesh_job);
+        add_face(4, x, y, z, current_block_material, faces, mesh_job);
     }
 }
 bool Renderer::should_render_face(unsigned short current_material, unsigned short neighbour_material){
@@ -336,71 +345,41 @@ Vector2 Renderer::get_atlas_coords(unsigned short material_type, int face_id){
 
 void Renderer::add_face(int face_id, int x, int y, int z,
                         unsigned short block_material,
-                        std::vector<float>& vertices,
-                        std::vector<float>& texcoords,
-                        std::vector<unsigned short>& indices,
-                        std::vector<unsigned char>& shades,
-                        int& indice_counter, const MeshJob& job
+                        std::vector<VoxelFaceData>& faces, const MeshJob& job
 ){
     bool is_top_block_of_water = block_material == World::BLOCK_MATERIALS::WATER and get_block_material(job, x, y + 1, z) != World::BLOCK_MATERIALS::WATER;
-    for (int i = 0; i < 4; ++i){
-        float vx = m_face_vertices[face_id][i].x;
-        float vy = m_face_vertices[face_id][i].y;
-        float vz = m_face_vertices[face_id][i].z;
 
-        if (is_top_block_of_water and vy == 1.0f) {
-            vy = 0.875f;
-        }
-        vertices.push_back(vx + x);
-        vertices.push_back(vy + y);
-        vertices.push_back(vz + z);
-    }
-    unsigned char face_shade = m_shades[face_id];
-    unsigned char ao_results[4];
+    // Get Atlas Coordinates
+    Vector2 atlas_coords = get_atlas_coords(block_material, face_id);
 
+    // Calculate AO for the 4 corners
+    float ao_results[4];
     for (int i = 0; i < 4; ++i){
         const auto& aov = ao_neighbors[face_id][i];
-        unsigned char ao = compute_ao(job, x, y, z,
+        ao_results[i] = compute_ao(job, x, y, z,
                                       aov.s1.dx, aov.s1.dy, aov.s1.dz,
                                       aov.s2.dx, aov.s2.dy, aov.s2.dz,
                                       aov.corner.dx, aov.corner.dy, aov.corner.dz, block_material);
-
-        ao_results[i] = ao;
-        unsigned char combined = (unsigned char)((int)face_shade * ao / 255);
-
-        shades.push_back(combined);
-        shades.push_back(combined);
-        shades.push_back(combined);
-        shades.push_back(255); // alpha
     }
 
-    int offset = indice_counter * 4;
+    // Pack the struct
+    VoxelFaceData faceData;
+    faceData.x = (float)x;
+    faceData.y = (float)y;
+    faceData.z = (float)z;
+    faceData.faceId = (float)face_id;
 
-    if (ao_results[0] + ao_results[2] > ao_results[1] + ao_results[3]) {
-        indices.push_back(offset + 0);
-        indices.push_back(offset + 1);
-        indices.push_back(offset + 2);
-        indices.push_back(offset + 2);
-        indices.push_back(offset + 3);
-        indices.push_back(offset + 0);
-    } else {
-        indices.push_back(offset + 1);
-        indices.push_back(offset + 2);
-        indices.push_back(offset + 3);
-        indices.push_back(offset + 3);
-        indices.push_back(offset + 0);
-        indices.push_back(offset + 1);
-    }
+    faceData.atlasX = atlas_coords.x;
+    faceData.atlasY = atlas_coords.y;
+    faceData.pad1 = is_top_block_of_water ? 1.0f : 0.0f; // Use padding to tell shader it's water!
+    faceData.pad2 = 0.0f;
 
-    indice_counter++;
+    faceData.ao0 = ao_results[0];
+    faceData.ao1 = ao_results[1];
+    faceData.ao2 = ao_results[2];
+    faceData.ao3 = ao_results[3];
 
-    Vector2 atlas_coords = get_atlas_coords(block_material, face_id);
-
-
-    for (auto uv : m_face_UVs){
-        texcoords.push_back((uv[0] + atlas_coords.x) * 0.0625f);
-        texcoords.push_back((uv[1] + atlas_coords.y) * 0.0625f);
-    }
+    faces.push_back(faceData);
 
 
 }
@@ -446,48 +425,43 @@ unsigned char Renderer::compute_ao(const MeshJob& job, int x, int y, int z,
 void Renderer::upload_mesh_to_gpu(const MeshResult& mesh_result){
     World::ChunkPos chunk_pos = mesh_result.chunk_pos;
     if (!Game::Get().m_world.m_chunks.contains(chunk_pos)) return;
-    Mesh mesh = {0};
-    if (mesh_result.vertices.size() > 0){
-        mesh.vertexCount = mesh_result.vertices.size()/3;
-        mesh.triangleCount = mesh_result.indices.size()/3;
-        mesh.vertices = (float *)MemAlloc(mesh.vertexCount * 3 * sizeof(float));
-        mesh.texcoords = (float *)MemAlloc(mesh.vertexCount * 2 * sizeof(float));
-        mesh.indices = (unsigned short *)MemAlloc(mesh.triangleCount * 3 * sizeof(unsigned short));
-        mesh.colors = (unsigned char *)MemAlloc(mesh.vertexCount * 4 * sizeof(unsigned char));
 
-        memcpy(mesh.vertices, mesh_result.vertices.data(), mesh_result.vertices.size()*sizeof(float));
-        memcpy(mesh.texcoords, mesh_result.texcoords.data(), mesh_result.texcoords.size() * sizeof(float));
-        memcpy(mesh.indices, mesh_result.indices.data(), mesh_result.indices.size()*sizeof(unsigned short));
-        memcpy(mesh.colors, mesh_result.shades.data(), mesh_result.shades.size()* sizeof(unsigned char) );
-        UploadMesh(&mesh, true);
-    }
     if (m_chunk_meshes.contains(chunk_pos)){
-        UnloadMesh(m_chunk_meshes[chunk_pos]);
-        m_chunk_meshes.erase(chunk_pos);
-    }
-    m_chunk_meshes[chunk_pos] = mesh;
+            rlUnloadShaderBuffer(m_chunk_meshes[chunk_pos].ssboId);
+            m_chunk_meshes.erase(chunk_pos);
+        }
 
-    Mesh mesh_transparent = {0};
-    if (mesh_result.vertices_transparent.size() > 0){
-        mesh_transparent.vertexCount = mesh_result.vertices_transparent.size()/3;
-        mesh_transparent.triangleCount = mesh_result.indices_transparent.size()/3;
-        mesh_transparent.vertices = (float *)MemAlloc(mesh_transparent.vertexCount * 3 * sizeof(float));
-        mesh_transparent.texcoords = (float *)MemAlloc(mesh_transparent.vertexCount * 2 * sizeof(float));
-        mesh_transparent.indices = (unsigned short *)MemAlloc(mesh_transparent.triangleCount * 3 * sizeof(unsigned short));
-        mesh_transparent.colors = (unsigned char *)MemAlloc(mesh_transparent.vertexCount * 4 * sizeof(unsigned char));
 
-        memcpy(mesh_transparent.vertices, mesh_result.vertices_transparent.data(), mesh_result.vertices_transparent.size()*sizeof(float));
-        memcpy(mesh_transparent.texcoords, mesh_result.texcoords_transparent.data(), mesh_result.texcoords_transparent.size() * sizeof(float));
-        memcpy(mesh_transparent.indices, mesh_result.indices_transparent.data(), mesh_result.indices_transparent.size()*sizeof(unsigned short));
-        memcpy(mesh_transparent.colors, mesh_result.shades_transparent.data(), mesh_result.shades_transparent.size()* sizeof(unsigned char) );
-        UploadMesh(&mesh_transparent, true);
+    ChunkRenderData opaqueData;
+    if (!mesh_result.opaque_faces.empty()){
+        opaqueData.faceCount = mesh_result.opaque_faces.size();
+        opaqueData.ssboId = rlLoadShaderBuffer(
+            opaqueData.faceCount * sizeof(VoxelFaceData),
+            mesh_result.opaque_faces.data(),
+            RL_DYNAMIC_DRAW
+        );
     }
+    m_chunk_meshes[chunk_pos] = opaqueData;
+
+
+
+
     if (m_chunk_meshes_transparent.contains(chunk_pos)){
-        UnloadMesh(m_chunk_meshes_transparent[chunk_pos]);
+        rlUnloadShaderBuffer(m_chunk_meshes_transparent[chunk_pos].ssboId);
         m_chunk_meshes_transparent.erase(chunk_pos);
     }
+    ChunkRenderData transparentData;
+    if (!mesh_result.transparent_faces.empty()){
+        transparentData.faceCount = mesh_result.transparent_faces.size();
+        transparentData.ssboId = rlLoadShaderBuffer(
+            transparentData.faceCount * sizeof(VoxelFaceData),
+            mesh_result.transparent_faces.data(),
+            RL_DYNAMIC_DRAW
+        );
+    }
+    m_chunk_meshes_transparent[chunk_pos] = transparentData;
 
-    m_chunk_meshes_transparent[chunk_pos] = mesh_transparent;
+
 
     auto it = Game::Get().m_world.m_chunks.find(chunk_pos);
     if (it != Game::Get().m_world.m_chunks.end()) it->second->m_is_meshing = false;

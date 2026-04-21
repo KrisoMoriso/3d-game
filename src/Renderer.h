@@ -16,20 +16,29 @@ public:
     }
     // remeshes needed chunks after world interaction
     void update_block_meshes(World::ChunkPos chunk_pos, int local_x, int local_y, int local_z);
-    std::unordered_map<World::ChunkPos, Mesh, World::ChunkPosHash> m_chunk_meshes;
-    std::unordered_map<World::ChunkPos, Mesh, World::ChunkPosHash> m_chunk_meshes_transparent;
+    struct ChunkRenderData {
+        unsigned int ssboId = 0;
+        int faceCount = 0;
+    };
+    std::unordered_map<World::ChunkPos, ChunkRenderData, World::ChunkPosHash> m_chunk_meshes;
+    std::unordered_map<World::ChunkPos, ChunkRenderData, World::ChunkPosHash> m_chunk_meshes_transparent;
 
 private:
+    struct VoxelFaceData {
+        float x, y, z;
+        float faceId;         // 0.0 to 5.0
+
+        float atlasX, atlasY; // Atlas offsets
+        float pad1, pad2;     // Empty padding to align perfectly to 16 bytes
+
+        float ao0, ao1, ao2, ao3; // Your AO values (passed as floats 0.0 to 255.0)
+    };
+    std::vector<VoxelFaceData> m_faces;
+
     Model m_cube_model;
     struct MeshResult{
-        std::vector<float> vertices;
-        std::vector<float> texcoords;
-        std::vector<unsigned short> indices;
-        std::vector<unsigned char> shades;
-        std::vector<float> vertices_transparent;
-        std::vector<float> texcoords_transparent;
-        std::vector<unsigned short> indices_transparent;
-        std::vector<unsigned char> shades_transparent;
+        std::vector<VoxelFaceData> opaque_faces;
+        std::vector<VoxelFaceData> transparent_faces;
         World::ChunkPos chunk_pos;
     };
     struct MeshJob{
@@ -42,17 +51,12 @@ private:
     bool are_chunk_neighbours_ready(World::ChunkPos chunk_pos);
     MeshJob pack_mesh_job(World::ChunkPos chunk_pos);
     void update_mesh_chunk(const MeshJob& mesh_job, ThreadPool::SafeQueue<MeshResult>& result_queue);
-    void perform_culling(int x, int y, int z, unsigned short current_block_material, std::vector<float>& vertices,
-                         std::vector<float>& texcoords, std::vector<unsigned short>& indices,
-                         std::vector<unsigned char>& shades, int& indice_counter, const MeshJob& mesh_job);
+    void perform_culling(int x, int y, int z, unsigned short current_block_material,
+                     std::vector<VoxelFaceData>& faces, const MeshJob& mesh_job);
+
+    void add_face(int face_id, int x, int y, int z, unsigned short block_material,
+                  std::vector<VoxelFaceData>& faces, const MeshJob& job);
     bool should_render_face(unsigned short current_material, unsigned short neighbour_material);
-    void add_face(int face_id, int x, int y, int z,
-                  unsigned short block_material,
-                  std::vector<float>& vertices,
-                  std::vector<float>& texcoords,
-                  std::vector<unsigned short>& indices,
-                  std::vector<unsigned char>& shades,
-                  int& indice_counter, const MeshJob& job);
     bool send_chunk_to_thread(World::ChunkPos chunk_pos, bool is_priority);
     ThreadPool::SafeQueue<MeshResult> m_result_queue;
     ThreadPool::SafeQueue<MeshResult> m_result_queue_priority;

@@ -75,7 +75,14 @@ void Game::debug_menu(){
     ImGui::Text("FPS: %d", GetFPS());
 
     ImGui::Text("x: %f y: %f z: %f", m_player.m_camera.position.x, m_player.m_camera.position.y, m_player.m_camera.position.z);
-    ImGui::Text("Block in inventory: %s", World::BLOCK_MATERIALS::match_material(m_player.m_block_in_inventory).c_str());
+    ImGui::Text("Block in inventory: %s",
+                World::BLOCK_MATERIALS::match_material(m_player.m_block_in_inventory).c_str());
+
+
+    World::ChunkPos chunk_pos = World::get_chunk_position(m_player.m_position);
+    ImGui::Text("Chunk: %s", m_world.m_chunks.contains(chunk_pos) ? "true" : "false");
+    ImGui::Text("Opaque mesh: %s", m_renderer.m_chunk_meshes.contains(chunk_pos) ? "true" : "false");
+    ImGui::Text("Transparent mesh: %s", m_renderer.m_chunk_meshes_transparent.contains(chunk_pos) ? "true" : "false");
 
     ImGui::End();
 }

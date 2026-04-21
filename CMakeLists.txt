@@ -4,6 +4,7 @@ project(3d_game)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(RAYLIB_VERSION 5.5)
 
+set(OPENGL_VERSION "4.3" CACHE STRING "Force OpenGL 4.3 for SSBO support" FORCE)
 # Automatically detect the compiler and apply static linking
 if(MSVC)
     # If Ninja is using the Microsoft compiler
